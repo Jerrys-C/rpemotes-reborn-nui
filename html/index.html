@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPEmotes Menu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="emote-menu" class="hidden">
+        <div class="sidebar" id="sidebar"></div>
+
+        <div class="menu-main">
+            <div class="menu-header">
+                <div class="drag-handle" id="drag-handle"></div>
+                <div class="search-row">
+                    <div class="search-container">
+                        <svg class="search-icon" viewBox="0 0 24 24">
+                            <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2" fill="none"/>
+                            <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                        <input type="text" id="search-input" autocomplete="off" spellcheck="false" />
+                    </div>
+                    <button id="close-btn" title="Close">&times;</button>
+                </div>
+            </div>
+
+            <div class="category-title" id="category-title"></div>
+
+            <div class="content-area">
+                <div class="content-scroll" id="content-scroll">
+                    <div id="emote-grid" class="emote-grid"></div>
+                </div>
+            </div>
+
+            <div class="menu-footer" id="menu-footer"></div>
+        </div>
+
+        <div id="keybind-modal" class="modal hidden">
+            <div class="modal-content">
+                <h3 id="keybind-modal-title"></h3>
+                <div id="keybind-slots"></div>
+                <button id="keybind-cancel" class="modal-cancel"></button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/nui.js"></script>
+    <script src="js/store.js"></script>
+    <script src="js/search.js"></script>
+    <script src="js/smoothScroll.js"></script>
+    <script src="js/emoteList.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

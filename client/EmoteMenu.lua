@@ -10,18 +10,17 @@ ExpressionData = {}
 ---@type table<string, WalkData>
 WalkData = {}
 
-local isMenuProcessing = false
+local isNuiMenuOpen = false
 local isWaitingForPed = false
-keybindMenu = nil -- Global variable. Scary!
-favoriteMenu = nil -- Global variable. Scary!
+local cachedPayload = nil
 local currentZoomState = false
-local dataForKeybind = {}
 
--- Tracks currently selected menu item for instruction button visibility
-CurrentMenuSelection = {
-    name = nil,
-    emoteType = nil,
-}
+---@type table<string, {name: string, emoteType: EmoteType}[]>
+local categoryToEmotes = {}
+
+-- LastEmote is a global defined in Emote.lua; we read/write it for preview ped state
+
+-- ─── Utility functions (preserved from original) ───
 
 local function canPlayerEmote()
     local ped = PlayerPedId()
@@ -36,6 +35,10 @@ end
 
 local function hasClonedPed()
     return ClonedPed and DoesEntityExist(ClonedPed)
+end
+
+local function getPreviewZoomForEmoteType(emoteType)
+    return emoteType == EmoteType.EXPRESSIONS
 end
 
 local function isEmoteTypePreviewable(emoteType)
@@ -54,52 +57,11 @@ local function isEmoteTypePlayable(emoteType)
         or emoteType == EmoteType.EMOTES
 end
 
-local function addEmoteToMenu(menu, items, emoteName, label, description, emoteType)
-    local item = NativeUI.CreateItem(label, description)
-    local hasPermission = HasEmotePermission(emoteName, emoteType)
-    item:Enabled(hasPermission)
-    menu:AddItem(item)
-    items[#items+1] = {name = emoteName, emoteType = emoteType, label = label}
-end
-
-local function formatSharedEmoteDescription(emoteName, secondPlayersAnim)
-    if secondPlayersAnim == nil then
-        return string.format("/nearby (~g~%s~w~)", emoteName)
-    else
-        return string.format("/nearby (~g~%s~w~) %s (~y~%s~w~)", emoteName, Translate('makenearby'), secondPlayersAnim)
-    end
-end
-
-local function getMenuPosition()
-    local rightPosition = { x = 1430, y = 200 }
-    local leftPosition = { x = 0, y = 200 }
-
-    if GetAspectRatio() > 2.0 then
-        rightPosition = { x = 1200, y = 100 }
-        leftPosition = { x = -250, y = 100 }
-    end
-
-    if Config.MenuPosition == "left" then
-        return leftPosition
-    elseif Config.MenuPosition == "right" then
-        return rightPosition
-    end
-
-    return { x = 0, y = 200 }
-end
-
 local function matchesSearchTerm(emoteName, emoteData, searchTerm)
     local lowerSearch = string.lower(searchTerm)
     return string.find(string.lower(emoteName), lowerSearch)
         or (emoteData.label
             and string.find(string.lower(emoteData.label), lowerSearch))
-end
-
-local function addResetMenuItem(menu, items, emoteType)
-    local resetItem = NativeUI.CreateItem(Translate('normalreset'), Translate('resetdef'))
-    menu:AddItem(resetItem)
-    items[#items+1] = {name = Translate('resetdef'), emoteType = emoteType, notAnEmote = true}
-    return resetItem
 end
 
 ---@param emoteName string
@@ -137,7 +99,7 @@ local function sortEmotesByLabel(emotes)
 end
 
 --- Expands EmoteTypes in CustomCategories to actual emote names
----@return table<string, {name: string, emoteType: EmoteType}> -- Returns category name to array of emote names
+---@return table<string, {name: string, emoteType: EmoteType}[]>
 local function expandCustomCategories()
     local expanded = {}
 
@@ -145,9 +107,7 @@ local function expandCustomCategories()
         expanded[categoryName] = {}
 
         for emoteType, emoteNames in pairs(emoteTypeMap) do
-            -- Check if the array is empty (include all emotes of this type)
             if #emoteNames == 0 then
-                -- Include all emotes of this type from RP
                 if RP and RP[emoteType] then
                     for emoteName in pairs(RP[emoteType]) do
                         expanded[categoryName][#expanded[categoryName]+1] = {
@@ -157,9 +117,7 @@ local function expandCustomCategories()
                     end
                 end
             else
-                -- Include only the specified emotes
                 for _, emoteName in ipairs(emoteNames) do
-                    -- Verify it exists in the appropriate data structure
                     if RP and RP[emoteType] and RP[emoteType][emoteName] then
                         expanded[categoryName][#expanded[categoryName]+1] = {
                             name = emoteName,
@@ -174,47 +132,11 @@ local function expandCustomCategories()
     return expanded
 end
 
-local menuPosition = getMenuPosition()
-local menuHeader = "shopui_title_sm_hangar"
-
-if Config.CustomMenuEnabled then
-    local txd = CreateRuntimeTxd('Custom_Menu_Head')
-    CreateRuntimeTextureFromImage(txd, 'Custom_Menu_Head', 'header.png')
-    menuHeader = "Custom_Menu_Head"
-end
-
-local _menuPool = NativeUI.CreatePool()
-local mainMenu = NativeUI.CreateMenu(Config.MenuTitle or "", "", menuPosition.x, menuPosition.y, menuHeader, menuHeader)
-_menuPool:Add(mainMenu)
-
----@class MenuItem
----@field name string
----@field emoteType EmoteType
-
----@class SubMenu
----@field menu table
----@field items MenuItem[]
-
----@type table<Category, SubMenu>
-local subMenus = {}
-
----@type table<string, {name: string, emoteType: EmoteType}[]>
-local categoryToEmotes = {}
-
--- Emoji prefixes for different emote types
-local EMOTE_PREFIX = {
-    [EmoteType.DANCES] = "🤼 ",
-    [EmoteType.ANIMAL_EMOTES] = "🐶 ",
-    [EmoteType.PROP_EMOTES] = "📦 ",
-}
-
 local function shouldShowEmojiMenu()
     if not Config.EmojiMenuEnabled then return false end
     if not Config.EmojiMenuAnimalsOnly then return true end
-
     return not IsPedHuman(PlayerPedId())
 end
-
 
 function SendSharedEmoteRequest(emoteName)
     local target, distance = GetClosestPlayer()
@@ -226,7 +148,8 @@ function SendSharedEmoteRequest(emoteName)
     end
 end
 
---- Unified handler for emote selection from menus
+--- Simplified emote selection handler for NUI
+--- NUI sends explicit intent (play, place, group, keybind) via separate callbacks
 local function handleEmoteSelection(emoteName, emoteType, textureVariation)
     local emote = getEmoteData(emoteName, emoteType)
     if not emote then return end
@@ -237,710 +160,22 @@ local function handleEmoteSelection(emoteName, emoteType, textureVariation)
     end
 
     if emote.emoteType == EmoteType.SHARED then
-        -- Check for keybind request (K key)
-        if Config.Keybinding and IsControlPressed(2, 311) then
-            dataForKeybind = {emoteName = emoteName, emoteType = emote.emoteType, label = emote.label}
-            RebuildKeybindEmoteMenu()
-            keybindMenu.menu:Visible(true)
-            return
-        end
-        dataForKeybind = {}
-
         SendSharedEmoteRequest(emoteName)
     elseif isEmoteTypePlayable(emote.emoteType) then
-        -- Check for group emote request (CTRL key)
-        if IsDisabledControlPressed(0, 36) then
-            OnGroupEmoteRequest(emoteName)
-            return
-        end
-
-        -- Check for keybind request (K key)
-        if Config.Keybinding and IsControlPressed(2, 311) then
-            dataForKeybind = {emoteName = emoteName, emoteType = emote.emoteType, label = emote.label}
-            RebuildKeybindEmoteMenu()
-            keybindMenu.menu:Visible(true)
-            return
-        end
-        dataForKeybind = {}
-
-        if Config.PlacementEnabled then
-            local shiftHeld = IsControlPressed(0, 21)
-            local movingForward = Config.DisablePlacementKeybindWhileMoving and (IsControlPressed(0,32) or IsControlPressed(0,31) or IsControlPressed(0,30)) -- INPUT_MOVE_UP_ONLY or INPUT_MOVE_UP or INPUT_MOVE_LR
-            local placementState = GetPlacementState()
-
-            if not movingForward and shiftHeld and placementState ~= PlacementState.PREVIEWING and placementState ~= PlacementState.WALKING then
-                StartNewPlacement(emoteName)
-                return
-            end
-        end
-
         EmoteMenuStart(emoteName, textureVariation, emoteType)
     end
 end
 
 local function hidePreview()
     LastEmote = {}
-    currentZoomState = false  -- Reset zoom state
+    currentZoomState = false
 
     if hasClonedPed() then
         ClosePedMenu()
     end
 end
 
---- Unified handler that updates CurrentMenuSelection, instruction buttons, and ped preview
---- Called whenever menu selection changes (scroll, menu open, menu close)
----@param currentMenu table The menu to check for preview
-local function onMenuItemHover(currentMenu)
-    -- Handle main menu or no menu - clear everything
-    if not currentMenu or currentMenu == mainMenu then
-        CurrentMenuSelection = {}
-        if mainMenu then
-            mainMenu:UpdateScaleform()
-        end
-        hidePreview()
-        return
-    end
-
-    -- Find the menu in our subMenus table to get the items list
-    local subMenuData = nil
-    for _, data in pairs(subMenus) do
-        if data.menu == currentMenu then
-            subMenuData = data
-            break
-        end
-    end
-
-    if not subMenuData then
-        CurrentMenuSelection = {}
-        currentMenu:UpdateScaleform()
-        hidePreview()
-        return
-    end
-
-    -- Get the current selection
-    local currentIndex = currentMenu:CurrentSelection()
-    if not currentIndex or currentIndex == 0 then
-        currentIndex = 1 -- Default to first item if no selection
-    end
-
-    if not subMenuData.items[currentIndex] or subMenuData.items[currentIndex].notAnEmote then
-        CurrentMenuSelection = {}
-        currentMenu:UpdateScaleform()
-        hidePreview()
-        return
-    end
-
-    local emoteName = subMenuData.items[currentIndex].name
-    local emoteType = subMenuData.items[currentIndex].emoteType
-    local emoteLabel = subMenuData.items[currentIndex].label
-
-    -- Always update CurrentMenuSelection for instruction buttons
-    CurrentMenuSelection = {
-        name = emoteName,
-        emoteType = emoteType,
-        label = emoteLabel,
-    }
-
-    -- Force scaleform refresh to update instruction buttons
-    currentMenu:UpdateScaleform()
-
-    local emote = EmoteData[emoteName] or SharedEmoteData[emoteName]
-
-    -- Check if the selected item is a previewable emote
-   -- Check if the selected item is a previewable emote
-    if emoteType == EmoteType.EXPRESSIONS or (emote and isEmoteTypePreviewable(emote.emoteType)) then
-        -- Determine if we need zoom (for expressions/moods, we want a closer view)
-        local needsZoom = (emoteType == EmoteType.EXPRESSIONS)
-
-        -- Check if we're already showing this exact emote - if so, do nothing
-        if LastEmote.name == emoteName and hasClonedPed() then
-            return
-        end
-
-        -- If zoom state changed, we need to recreate the ped
-        if hasClonedPed() and currentZoomState ~= needsZoom then
-            ClosePedMenu()
-        end
-
-        -- Clear previous preview (ClearPedTaskPreview uses LastEmote to know what to clear)
-        if hasClonedPed() then
-            ClearPedTaskPreview()
-        end
-
-        -- Update LastEmote to new preview
-        LastEmote = {
-            name = emoteName,
-            emoteType = emoteType,
-        }
-
-        -- Show this emote
-        if hasClonedPed() then
-            -- Ped exists, just switch animation
-            EmoteMenuStartClone(emoteName, emoteType)
-        else
-            -- Ped doesn't exist, create it with appropriate zoom
-            currentZoomState = needsZoom
-            ShowPedMenu(needsZoom)
-            WaitForClonedPedThenPlayLastAnim()
-        end
-    else
-        hidePreview()
-    end
-end
-
----@param parent SubMenu|table
----@param category string
----@param title string
----@param description? string
----@param emoteType? EmoteType
----@return SubMenu
-local function createSubMenu(parent, category, title, description, emoteType)
-    if parent.menu then
-        parent.items[#parent.items+1] = {name = title, emoteType = emoteType}
-    end
-    local menu = _menuPool:AddSubMenu(parent.menu or parent, title, description or '', true, true)
-    local items = {}
-
-    menu.OnIndexChange = function(_, newIndex)
-        onMenuItemHover(menu)
-    end
-
-    menu.OnItemSelect = function(_, _, index)
-        if Config.Search and items[index].name == Translate('searchemotes') then
-            EmoteMenuSearch(menu)
-            return
-        end
-
-        handleEmoteSelection(items[index].name, items[index].emoteType)
-    end
-
-    menu.OnListSelect = function(_, item, itemIndex, listIndex)
-        local emoteName = items[itemIndex].name
-        local emote = EmoteData[emoteName]
-        if not emote then return end
-        if emote.emoteType ~= EmoteType.PROP_EMOTES then return end
-        handleEmoteSelection(emoteName, items[itemIndex].emoteType, item:IndexToItem(listIndex).Value)
-    end
-
-    menu.OnMenuChanged = function(oldMenu, newMenu, forward)
-        onMenuItemHover(newMenu)
-    end
-
-    local subMenu = {
-        menu = menu,
-        items = items,
-    }
-    subMenus[category] = subMenu
-    return subMenu
-end
-
-local function addKeybindMenu(parent)
-    if parent then -- Hack-job to allow us to use the same function for both creating and rebuilding the menu.
-        createSubMenu(parent, "keybinds", Translate("keybinds"))
-    end
-    local menu = subMenus["keybinds"]
-
-    for id = 1, #Config.KeybindKeys do
-        local emoteData = GetResourceKvpString(string.format('%s_bind_%s', Config.keybindKVP, id))
-        if emoteData and emoteData ~= "" then
-            emoteData = json.decode(emoteData)
-        end
-        local label = string.format("Slot %i: ~b~%s~s~ %s", id, (emoteData and EmoteTypeEmoji[emoteData.emoteType]) or "", (emoteData and emoteData.label) or "Empty Slot")
-        local description = string.format("This slot is bound to [ ~b~%s~s~ ]. You can change this in the in-game settings.", GetKeyForCommand("emoteSelect"..id))
-        local item = NativeUI.CreateItem(label, description)
-        menu.menu:AddItem(item)
-        menu.items[#menu.items+1] = {name = "slot_"..id}
-    end
-
-    menu.menu.OnItemSelect = function(_, item, index)
-        if dataForKeybind.emoteName then
-            -- Set as bind.
-            local label = string.format("Slot %i: %s", index, dataForKeybind.label or "Empty Slot")
-            EmoteBindStart({index, dataForKeybind.emoteName, dataForKeybind.label, dataForKeybind.emoteType})
-            dataForKeybind = {}
-            _menuPool:RefreshIndex()
-            _menuPool:CloseAllMenus()
-            RebuildEmoteMenu()
-            mainMenu:Visible(true)
-        else
-            -- Delete bind.
-            if IsControlPressed(0,178) then
-                DeleteEmoteBind({index})
-                dataForKeybind = {}
-                _menuPool:RefreshIndex()
-                _menuPool:CloseAllMenus()
-                RebuildEmoteMenu()
-                mainMenu:Visible(true)
-                return
-            end
-
-            -- When pressing enter without an emote context, just do the anim.
-            ExecuteCommand("emoteSelect"..index)
-        end
-    end
-
-    return menu
-end
-
-local function addFavoritesMenu(parent)
-    if parent then -- Hack-job to allow us to use the same function for both creating and rebuilding the menu.
-        createSubMenu(parent, "favorites", Translate("favorites"), Translate("favoritesinfo"))
-    end
-    local menu = subMenus["favorites"]
-    local favoriteEmotes = GetFavoriteEmotes()
-    local favoriteEmotesMap = GetFavoriteEmotesMap()
-    for _, key in pairs(favoriteEmotesMap) do
-        local emoteData = favoriteEmotes[key]
-        local label = string.format("~b~%s~s~ %s", (emoteData and EmoteTypeEmoji[emoteData.emoteType]) or "", (emoteData and emoteData.label) or "Unknown Emote Name")
-        local item = NativeUI.CreateItem(label, "")
-        menu.menu:AddItem(item)
-        menu.items[#menu.items+1] = {name = emoteData.name, label = emoteData.label, emoteType = emoteData.emoteType}
-    end
-
-    menu.menu.OnItemSelect = function(_, __, index)
-        local item = menu.items[index]
-        -- If it's a regular emote, we go through the normal process.
-        local regularEmote = getEmoteData(item.name, item.emoteType)
-        if regularEmote and (item.emoteType ~= EmoteType.EXPRESSIONS and item.emoteType ~= EmoteType.WALKS) then
-            handleEmoteSelection(item.name, item.emoteType, item.textureVariation)
-            return
-        end
-        -- For Emojis got through the router
-        RouteEmoteToFunction(item.name, item.emoteType, item.textureVariation)
-    end
-
-    return menu
-end
-
-local function addEmoteMenu(menu)
-    local emoteMenu = createSubMenu(menu, EmoteType.EMOTES, Translate('emotes'))
-    if Config.Search then
-        emoteMenu.menu:AddItem(NativeUI.CreateItem(Translate('searchemotes'), ""))
-        emoteMenu.items[#emoteMenu.items+1] = {name = Translate('searchemotes'), emoteType = nil}
-    end
-
-    -- Create submenus for each custom category
-    for categoryName in pairs(categoryToEmotes) do
-        createSubMenu(emoteMenu, categoryName, categoryName)
-    end
-
-    -- Populate each category with its emotes
-    for categoryName, emoteList in pairs(categoryToEmotes) do
-        local categoryMenu = subMenus[categoryName]
-        if categoryMenu then
-            sortEmotesByLabel(emoteList)
-            for _, emoteInfo in ipairs(emoteList) do
-                local emoteName = emoteInfo.name
-                local emoteType = emoteInfo.emoteType
-                local data = getEmoteData(emoteName, emoteType)
-
-                if data then
-                    -- Check if this emote type is enabled
-                    if data.emoteType == EmoteType.ANIMAL_EMOTES and not Config.AnimalEmotesEnabled then
-                        goto continue
-                    end
-                    if data.emoteType == EmoteType.SHARED and not Config.SharedEmotesEnabled then
-                        goto continue
-                    end
-
-                    -- Check model compatibility
-                    if CachedPlayerModel and not IsModelCompatible(CachedPlayerModel, emoteName) then
-                        goto continue
-                    end
-
-                    local hasPermission = HasEmotePermission(emoteName, emoteType)
-
-                    if data.emoteType == EmoteType.SHARED then
-                        local desc = formatSharedEmoteDescription(emoteName, data.secondPlayersAnim)
-                        local shareitem = NativeUI.CreateItem(data.label, desc)
-                        shareitem:Enabled(hasPermission)
-                        categoryMenu.menu:AddItem(shareitem)
-                        categoryMenu.items[#categoryMenu.items+1] = {name = emoteName, emoteType = data.emoteType, label = data.label}
-                    elseif data.emoteType == EmoteType.PROP_EMOTES then
-                        local label = EMOTE_PREFIX[EmoteType.PROP_EMOTES] .. data.label
-                        local propitem = data.AnimationOptions.PropTextureVariations and
-                            NativeUI.CreateListItem(label, data.AnimationOptions.PropTextureVariations, 1, string.format("/e (%s)", emoteName)) or
-                            NativeUI.CreateItem(label, string.format("/e (%s)", emoteName))
-                        propitem:Enabled(hasPermission)
-                        categoryMenu.menu:AddItem(propitem)
-                        categoryMenu.items[#categoryMenu.items+1] = {name = emoteName, emoteType = data.emoteType, label = data.label}
-                    else
-                        -- EMOTES, DANCES, ANIMAL_EMOTES
-                        local prefix = EMOTE_PREFIX[data.emoteType] or ""
-                        local label = prefix .. data.label
-                        addEmoteToMenu(categoryMenu.menu, categoryMenu.items, emoteName, label, string.format("/e (%s)", emoteName), data.emoteType)
-                    end
-                    ::continue::
-                end
-            end
-        end
-    end
-
-
-    -- Put all the emotes with EmoteType.EMOTES (and ANIMAL_EMOTES if enabled) within the emotes category
-    local emotesList = {}
-    for emoteName, data in pairs(EmoteData) do
-        local isRegularEmote = data.emoteType == EmoteType.EMOTES
-        local isAnimalEmote = Config.AnimalEmotesEnabled and data.emoteType == EmoteType.ANIMAL_EMOTES
-        if isRegularEmote or isAnimalEmote then
-            -- Check model compatibility
-            if not CachedPlayerModel or IsModelCompatible(CachedPlayerModel, emoteName) then
-                emotesList[#emotesList + 1] = emoteName
-            end
-        end
-    end
-    sortEmotesByLabel(emotesList)
-    for _, emoteName in ipairs(emotesList) do
-        local data = EmoteData[emoteName]
-        addEmoteToMenu(emoteMenu.menu, emoteMenu.items, emoteName, data.label, string.format("/e (%s)", emoteName), data.emoteType)
-    end
-end
-
-if Config.Search then
-    function EmoteMenuSearch(lastMenu)
-        ClosePedMenu()
-
-        -- Clean up any previous search results from the menu
-        for i = #lastMenu.Items, 1, -1 do
-            local item = lastMenu.Items[i]
-            if item and item.Description and type(item.Description) == "string" and string.find(item.Description, Translate('searchmenudesc')) then
-                lastMenu:RemoveItemAt(i)
-            end
-        end
-        _menuPool:RefreshIndex()
-
-    AddTextEntry("PM_NAME_CHALL", Translate('searchinputtitle'))
-        DisplayOnscreenKeyboard(1, "PM_NAME_CHALL", "", "", "", "", "", 30)
-        while UpdateOnscreenKeyboard() == 0 do
-            DisableAllControlActions(0)
-            Wait(100)
-        end
-        local input = GetOnscreenKeyboardResult()
-        if not input then return end
-
-        local results = {}
-        for emoteName, emoteData in pairs(EmoteData) do
-            if matchesSearchTerm(emoteName, emoteData, input) then
-                -- Check model compatibility
-                if not CachedPlayerModel or IsModelCompatible(CachedPlayerModel, emoteName) then
-                    results[#results + 1] = { table = emoteData.emoteType, name = emoteName, data = emoteData }
-                end
-            end
-        end
-
-        if Config.SharedEmotesEnabled then
-            for emoteName, emoteData in pairs(SharedEmoteData) do
-                if matchesSearchTerm(emoteName, emoteData, input) then
-                    results[#results + 1] = { table = EmoteType.SHARED, name = emoteName, data = emoteData }
-                end
-            end
-        end
-
-        if #results <= 0 then
-            SimpleNotify(string.format(Translate('searchnoresult')..' ~r~%s~w~', input))
-            return
-        end
-
-        local searchMenu = _menuPool:AddSubMenu(lastMenu, string.format('%s '..Translate('searchmenudesc')..' ~r~%s~w~', #results, input), "", true, true)
-
-        table.sort(results, function(a, b) return a.name < b.name end)
-        for index, result in pairs(results) do
-            local desc
-            if result.table == EmoteType.SHARED then
-                desc = formatSharedEmoteDescription(result.name, result.data.secondPlayersAnim)
-            else
-                desc = "/e (" .. result.name .. ")"
-            end
-
-            local hasPermission = HasEmotePermission(result.name, result.data.emoteType)
-            local item
-            if result.data.AnimationOptions and result.data.AnimationOptions.PropTextureVariations then
-                item = NativeUI.CreateListItem(result.data.label, result.data.AnimationOptions.PropTextureVariations, 1, desc)
-            else
-                item = NativeUI.CreateItem(result.data.label, desc)
-            end
-            item:Enabled(hasPermission)
-            searchMenu:AddItem(item)
-        end
-
-        searchMenu.OnMenuChanged = function()
-            ShowPedMenu()
-            -- Update CurrentMenuSelection for the first item and refresh scaleform
-            if results[1] then
-                CurrentMenuSelection = {name = results[1].name, emoteType = results[1].data.emoteType}
-                searchMenu:UpdateScaleform()
-            end
-        end
-
-        searchMenu.OnIndexChange = function(_, newindex)
-            local result = results[newindex]
-
-            -- Update CurrentMenuSelection for instruction buttons
-            CurrentMenuSelection = {name = result.name, emoteType = result.data.emoteType}
-            searchMenu:UpdateScaleform()
-
-            -- Clear previous preview before updating LastEmote
-            if hasClonedPed() and LastEmote.name ~= result.name then
-                ClearPedTaskPreview()
-            end
-
-            -- Update LastEmote for the new preview
-            LastEmote = {name = result.name, emoteType = result.data.emoteType}
-
-            EmoteMenuStartClone(result.name, result.data.emoteType)
-        end
-
-        searchMenu.OnItemSelect = function(_, _, index)
-            local data = results[index]
-            handleEmoteSelection(data.name, data.table)
-        end
-
-        searchMenu.OnListSelect = function(_, item, itemIndex, listIndex)
-            handleEmoteSelection(results[itemIndex].name, results[itemIndex].table, item:IndexToItem(listIndex).Value)
-        end
-
-        searchMenu.OnMenuClosed = function()
-            searchMenu:Clear()
-            lastMenu:RemoveItemAt(#lastMenu.Items)
-            _menuPool:RefreshIndex()
-            results = {}
-            -- Clear CurrentMenuSelection and update instruction buttons when closing search
-            CurrentMenuSelection = {}
-            if lastMenu then
-                lastMenu:UpdateScaleform()
-            end
-        end
-
-        _menuPool:RefreshIndex()
-        _menuPool:CloseAllMenus()
-        searchMenu:Visible(true)
-
-        -- Set CurrentMenuSelection for the first search result to show instruction buttons
-        if results[1] then
-            CurrentMenuSelection = {name = results[1].name, emoteType = results[1].data.emoteType}
-            LastEmote = {name = results[1].name, emoteType = results[1].data.emoteType}
-            searchMenu:UpdateScaleform()
-        end
-
-        ShowPedMenu()
-        WaitForClonedPedThenPlayLastAnim()
-    end
-end
-
-local function addCancelEmote(menu)
-    local newitem = NativeUI.CreateItem(Translate('cancelemote'), Translate('cancelemoteinfo'))
-    menu:AddItem(newitem)
-    newitem.Activated = function()
-        EmoteCancel()
-        DestroyAllProps()
-    end
-end
-
----@class ResetableDataMenuConfig
----@field parent table The parent menu to attach this submenu to
----@field emoteType EmoteType The type of emote (WALKS or EXPRESSIONS)
----@field title string The menu title
----@field dataSource table<string, WalkData|ExpressionData> The data source containing the items
----@field onReset fun() Function to call when the reset item is selected
----@field onSelect fun(itemName: string) Function to call when a data item is selected
-
--- Generic builder for menus with reset functionality (walks, expressions, etc)
----@param input ResetableDataMenuConfig
-local function addResetableDataMenu(input)
-    createSubMenu(input.parent, input.emoteType, input.title)
-    local menu = subMenus[input.emoteType]
-    local resetItem = addResetMenuItem(menu.menu, menu.items, input.emoteType)
-
-    -- Sort and add items
-    local sortedItems = {}
-    for name in pairs(input.dataSource) do
-        sortedItems[#sortedItems + 1] = name
-    end
-    sortEmotesByLabel(sortedItems)
-
-    for _, itemName in ipairs(sortedItems) do
-        local data = input.dataSource[itemName]
-        local label = data.label or itemName
-        local description = input.emoteType == EmoteType.WALKS and string.format("/walk (%s)", string.lower(label)) or ""
-        local hasPermission = HasEmotePermission(itemName, input.emoteType)
-        local item = NativeUI.CreateItem(label, description)
-        item:Enabled(hasPermission)
-        menu.menu:AddItem(item)
-        menu.items[#menu.items+1] = {name = itemName, emoteType = input.emoteType}
-    end
-
-    menu.menu.OnItemSelect = function(_, item, index)
-        if item == resetItem then
-            input.onReset()
-        else
-            local itemName = menu.items[index].name
-            if not HasEmotePermission(itemName, input.emoteType) then
-                local typeName = input.emoteType == EmoteType.WALKS and "walk" or "expression"
-                EmoteChatMessage(string.format("You don't have permission to use this %s", typeName))
-                return
-            end
-            input.onSelect(itemName)
-        end
-    end
-end
-
-local function addWalkMenu(menu)
-    addResetableDataMenu({
-        parent = menu,
-        emoteType = EmoteType.WALKS,
-        title = Translate('walkingstyles'),
-        dataSource = WalkData,
-        onReset = function()
-            ResetWalk()
-            DeleteResourceKvp("walkstyle")
-        end,
-        onSelect = function(itemName)
-            -- Check for keybind request (K key)
-            if Config.Keybinding and IsControlPressed(2, 311) then
-                dataForKeybind = {emoteName = itemName, emoteType = EmoteType.WALKS, label = itemName}
-                RebuildKeybindEmoteMenu()
-                keybindMenu.menu:Visible(true)
-                return
-            end
-            dataForKeybind = {}
-            WalkMenuStart(itemName)
-        end
-    })
-end
-
-local function addFaceMenu(menu)
-    addResetableDataMenu({
-        parent = menu,
-        emoteType = EmoteType.EXPRESSIONS,
-        title = Translate('moods'),
-        dataSource = ExpressionData,
-        onReset = function()
-            DeleteResourceKvp(EmoteType.EXPRESSIONS)
-            ClearFacialIdleAnimOverride(PlayerPedId())
-        end,
-        onSelect = function(expressionName)
-            -- Check for keybind request (K key)
-            if Config.Keybinding and IsControlPressed(2, 311) then
-                dataForKeybind = {emoteName = expressionName, emoteType = EmoteType.EXPRESSIONS, label = expressionName}
-                RebuildKeybindEmoteMenu()
-                keybindMenu.menu:Visible(true)
-                return
-            end
-            dataForKeybind = {}
-
-            EmoteMenuStart(expressionName, nil, EmoteType.EXPRESSIONS)
-        end
-    })
-end
-
-local function addEmojiMenu(parent)
-    if parent then -- Hack-job to allow us to use the same function for both creating and rebuilding the menu.
-        createSubMenu(parent, "emojis", Translate("emojis"), Translate("emojisdescription"))
-    end
-    local menu = subMenus["emojis"]
-    local sortedEmojis = {}
-    for key, emoji in pairs(EmojiData) do
-        sortedEmojis[#sortedEmojis + 1] = {key = key, emoji = emoji}
-    end
-    table.sort(sortedEmojis, function(a, b) return a.key < b.key end)
-
-    for index, emojiData in pairs(sortedEmojis) do
-        local label = emojiData.emoji .. " " .. emojiData.key:gsub("_", " ")
-        local item = NativeUI.CreateItem(label, "")
-        menu.menu:AddItem(item)
-        menu.items[#menu.items+1] = {name = emojiData.key, label = label, emoteType = EmoteType.EMOJI, key = index}
-    end
-
-    menu.menu.OnItemSelect = function(_, __, index)
-        -- Check for keybind request (K key)
-        local item = menu.items[index]
-        if Config.Keybinding and IsControlPressed(2, 311) then
-            dataForKeybind = {emoteName = sortedEmojis[item.key].key, emoteType = EmoteType.EMOJI, label = sortedEmojis[item.key].emoji}
-            RebuildKeybindEmoteMenu()
-            keybindMenu.menu:Visible(true)
-            return
-        end
-        dataForKeybind = {}
-
-        ShowEmoji(sortedEmojis[item.key].key)
-    end
-
-    return menu
-end
-
-local function processMenu()
-    if isMenuProcessing then return end
-    isMenuProcessing = true
-    mainMenu:UpdateScaleform()
-    while _menuPool:IsAnyMenuOpen() do
-        _menuPool:ProcessMenus()
-        DisableControlAction(0, 36, true) -- Ducking, to not conflict with group emotes keybind
-        if Config.DisableCombatInMenu then
-            DisableControlAction(2, 25, true)
-            DisablePlayerFiring(PlayerId(), true)
-        end
-        if IsControlJustPressed(2,121) then -- Set as Favorites
-            if CurrentMenuSelection and CurrentMenuSelection.name and CurrentMenuSelection.emoteType then
-                local emoteData = {
-                    id = CurrentMenuSelection.emoteType.."_"..CurrentMenuSelection.name,
-                    name = CurrentMenuSelection.name,
-                    emoteType = CurrentMenuSelection.emoteType,
-                    label = CurrentMenuSelection.label or CurrentMenuSelection.name,
-                    textureVariation = CurrentMenuSelection.textureVariation or 1
-                }
-                ToggleFavoriteEmote(emoteData.id, emoteData)
-                RebuildFavoritesEmoteMenu()
-                local currentMenu = GetCurrentlyVisibleMenu()
-                currentMenu:UpdateScaleform()
-            end
-        end
-        Wait(0)
-    end
-    isMenuProcessing = false
-end
-
-local lastMenuOpenAttempt = 0
-
-function OpenEmoteMenu()
-    local now = GetGameTimer()
-    if now - lastMenuOpenAttempt < 200 then return end
-    lastMenuOpenAttempt = now
-
-    local canEmote, errorMsg = canPlayerEmote()
-    if not canEmote then
-        TriggerEvent('chat:addMessage', {
-            color = {255, 0, 0},
-            multiline = true,
-            args = {"RPEmotes", errorMsg}
-        })
-        return
-    end
-
-    local placementState = GetPlacementState()
-
-    if placementState == PlacementState.PREVIEWING or placementState == PlacementState.WALKING then return end
-
-    local shouldHaveEmojiMenu = shouldShowEmojiMenu()
-    local hasEmojiMenu = subMenus["emojis"] ~= nil
-
-    if hasEmojiMenu ~= shouldHaveEmojiMenu then
-        RebuildEmoteMenu()
-    end
-    if Config.Keybinding then
-        RebuildKeybindEmoteMenu()
-    end
-
-    if _menuPool:IsAnyMenuOpen() then
-        _menuPool:CloseAllMenus()
-    else
-        -- Clean up any existing preview before opening
-        if hasClonedPed() then
-            ClosePedMenu()
-        end
-        mainMenu:Visible(true)
-        processMenu()
-    end
-end
+-- ─── Data conversion (preserved from original) ───
 
 ---@param emoteName string
 ---@param emote EmoteData
@@ -968,7 +203,6 @@ local function convertToEmoteData(emoteName, emote)
             emote.anim = emote[2]
             emote.secondPlayersAnim = emote[4]
         end
-
         emote.label = emote[3]
     end
 
@@ -1084,180 +318,635 @@ local function convertRP()
     CONVERTED = true
 end
 
+-- ─── NUI Payload Builder ───
+
+--- Build emote items for a given data source, filtered by model compatibility and config
+---@param emoteDataSource table<string, EmoteData|SharedEmoteData>
+---@param emoteType EmoteType
+---@param filterTypes? EmoteType[] if provided, only include emotes whose emoteType is in this list
+---@return table[]
+local function buildEmoteItems(emoteDataSource, emoteType, filterTypes)
+    local items = {}
+    for emoteName, data in pairs(emoteDataSource) do
+        -- Apply emoteType filter if specified
+        if filterTypes then
+            local found = false
+            for _, ft in ipairs(filterTypes) do
+                if data.emoteType == ft then found = true break end
+            end
+            if not found then goto continue end
+        end
+
+        -- Check config flags
+        if data.emoteType == EmoteType.ANIMAL_EMOTES and not Config.AnimalEmotesEnabled then
+            goto continue
+        end
+        if data.emoteType == EmoteType.SHARED and not Config.SharedEmotesEnabled then
+            goto continue
+        end
+
+        -- Check model compatibility
+        if CachedPlayerModel and not IsModelCompatible(CachedPlayerModel, emoteName) then
+            goto continue
+        end
+
+        local item = {
+            name = emoteName,
+            label = data.label or emoteName,
+            emoteType = data.emoteType or emoteType,
+            hasPermission = HasEmotePermission(emoteName, data.emoteType or emoteType),
+        }
+
+        -- Include prop texture variations if present
+        if data.AnimationOptions and data.AnimationOptions.PropTextureVariations then
+            item.propVariations = data.AnimationOptions.PropTextureVariations
+        end
+
+        items[#items+1] = item
+        ::continue::
+    end
+
+    -- Sort by label
+    table.sort(items, function(a, b)
+        return string.lower(a.label) < string.lower(b.label)
+    end)
+
+    return items
+end
+
+--- Build the categories payload for the NUI menu
+---@return table<string, table[]>
+local function buildCategories()
+    local categories = {}
+
+    -- Custom categories (dances, props, shared, user-defined)
+    for categoryName, emoteList in pairs(categoryToEmotes) do
+        local items = {}
+        sortEmotesByLabel(emoteList)
+        for _, emoteInfo in ipairs(emoteList) do
+            local data = getEmoteData(emoteInfo.name, emoteInfo.emoteType)
+            if data then
+                -- Check config flags
+                if data.emoteType == EmoteType.ANIMAL_EMOTES and not Config.AnimalEmotesEnabled then
+                    goto continue
+                end
+                if data.emoteType == EmoteType.SHARED and not Config.SharedEmotesEnabled then
+                    goto continue
+                end
+                -- Check model compatibility
+                if CachedPlayerModel and not IsModelCompatible(CachedPlayerModel, emoteInfo.name) then
+                    goto continue
+                end
+
+                local item = {
+                    name = emoteInfo.name,
+                    label = data.label or emoteInfo.name,
+                    emoteType = data.emoteType or emoteInfo.emoteType,
+                    hasPermission = HasEmotePermission(emoteInfo.name, emoteInfo.emoteType),
+                }
+                if data.AnimationOptions and data.AnimationOptions.PropTextureVariations then
+                    item.propVariations = data.AnimationOptions.PropTextureVariations
+                end
+                items[#items+1] = item
+                ::continue::
+            end
+        end
+        categories[categoryName] = items
+    end
+
+    -- Main emotes category (regular emotes + animal emotes)
+    local mainEmotes = {}
+    for emoteName, data in pairs(EmoteData) do
+        local isRegularEmote = data.emoteType == EmoteType.EMOTES
+        local isAnimalEmote = Config.AnimalEmotesEnabled and data.emoteType == EmoteType.ANIMAL_EMOTES
+        if isRegularEmote or isAnimalEmote then
+            if not CachedPlayerModel or IsModelCompatible(CachedPlayerModel, emoteName) then
+                local item = {
+                    name = emoteName,
+                    label = data.label or emoteName,
+                    emoteType = data.emoteType,
+                    hasPermission = HasEmotePermission(emoteName, data.emoteType),
+                }
+                if data.AnimationOptions and data.AnimationOptions.PropTextureVariations then
+                    item.propVariations = data.AnimationOptions.PropTextureVariations
+                end
+                mainEmotes[#mainEmotes+1] = item
+            end
+        end
+    end
+    table.sort(mainEmotes, function(a, b)
+        return string.lower(a.label) < string.lower(b.label)
+    end)
+    categories[Translate('emotes')] = mainEmotes
+
+    return categories
+end
+
+--- Build favorites payload
+---@return table
+local function buildFavorites()
+    local favoriteEmotes = GetFavoriteEmotes()
+    local result = {}
+    for id, data in pairs(favoriteEmotes) do
+        result[id] = {
+            name = data.name,
+            label = data.label or data.name,
+            emoteType = data.emoteType,
+        }
+    end
+    return result
+end
+
+--- Build keybind data
+---@return table[]
+local function buildKeybindData()
+    local keybinds = {}
+    for id = 1, #Config.KeybindKeys do
+        local emoteData = GetResourceKvpString(string.format('%s_bind_%s', Config.keybindKVP, id))
+        local parsed = nil
+        if emoteData and emoteData ~= "" then
+            parsed = json.decode(emoteData)
+        end
+        keybinds[#keybinds+1] = {
+            slot = id,
+            label = parsed and parsed.label or nil,
+            emoteName = parsed and parsed.emoteName or nil,
+            emoteType = parsed and parsed.emoteType or nil,
+            keyLabel = GetKeyForCommand("emoteSelect"..id),
+        }
+    end
+    return keybinds
+end
+
+--- Build walks data
+---@return table[]
+local function buildWalkData()
+    local walks = {}
+    for name, data in pairs(WalkData) do
+        walks[#walks+1] = {
+            name = name,
+            label = data.label or name,
+            hasPermission = HasEmotePermission(name, EmoteType.WALKS),
+        }
+    end
+    table.sort(walks, function(a, b) return string.lower(a.label) < string.lower(b.label) end)
+    return walks
+end
+
+--- Build expressions data
+---@return table[]
+local function buildExpressionData()
+    local expressions = {}
+    for name, data in pairs(ExpressionData) do
+        expressions[#expressions+1] = {
+            name = name,
+            label = data.label or name,
+            hasPermission = HasEmotePermission(name, EmoteType.EXPRESSIONS),
+        }
+    end
+    table.sort(expressions, function(a, b) return string.lower(a.label) < string.lower(b.label) end)
+    return expressions
+end
+
+--- Build emoji data
+---@return table[]
+local function buildEmojiData()
+    if not shouldShowEmojiMenu() then return {} end
+    local emojis = {}
+    for key, emoji in pairs(EmojiData) do
+        emojis[#emojis+1] = {
+            name = key,
+            label = emoji .. " " .. key:gsub("_", " "),
+        }
+    end
+    table.sort(emojis, function(a, b) return a.name < b.name end)
+    return emojis
+end
+
+--- Get relevant config for NUI
+---@return table
+local function getRelevantConfig()
+    return {
+        searchEnabled = Config.Search,
+        keybindingEnabled = Config.Keybinding,
+        placementEnabled = Config.PlacementEnabled,
+        sharedEmotesEnabled = Config.SharedEmotesEnabled,
+        animalEmotesEnabled = Config.AnimalEmotesEnabled,
+        expressionsEnabled = Config.ExpressionsEnabled,
+        walkingStylesEnabled = Config.WalkingStylesEnabled,
+        emojiMenuEnabled = shouldShowEmojiMenu(),
+    }
+end
+
+--- Get translations for NUI
+---@return table
+local function getTranslations()
+    return {
+        emotes = Translate('emotes'),
+        danceemotes = Translate('danceemotes'),
+        animalemotes = Translate('animalemotes'),
+        propemotes = Translate('propemotes'),
+        shareemotes = Translate('shareemotes'),
+        cancelemote = Translate('cancelemote'),
+        walkingstyles = Translate('walkingstyles'),
+        moods = Translate('moods'),
+        favorites = Translate('favorites'),
+        keybinds = Translate('keybinds'),
+        emojis = Translate('emojis'),
+        searchemotes = Translate('searchemotes'),
+        searchnoresult = Translate('searchnoresult'),
+        normalreset = Translate('normalreset'),
+        resetdef = Translate('resetdef'),
+        btn_select = Translate('btn_select'),
+        btn_back = Translate('btn_back'),
+        btn_place = Translate('btn_place'),
+        btn_set_favorite = Translate('btn_set_favorite'),
+        btn_remove_favorite = Translate('btn_remove_favorite'),
+        btn_setkeybind = Translate('btn_setkeybind'),
+        btn_delkeybind = Translate('btn_delkeybind'),
+        btn_groupselect = Translate('btn_groupselect'),
+        cancelemoteinfo = Translate('cancelemoteinfo'),
+        favoritesinfo = Translate('favoritesinfo'),
+    }
+end
+
+--- Build the full menu payload for NUI
+---@return table
+local function buildMenuPayload()
+    return {
+        action = "openMenu",
+        categories = buildCategories(),
+        keybinds = buildKeybindData(),
+        walks = Config.WalkingStylesEnabled and buildWalkData() or {},
+        expressions = Config.ExpressionsEnabled and buildExpressionData() or {},
+        emojis = buildEmojiData(),
+        config = getRelevantConfig(),
+        translations = getTranslations(),
+    }
+end
+
+-- ─── Menu Open/Close ───
+
+function CloseNUIMenu()
+    SetNuiFocus(false, false)
+    SendNUIMessage({ action = "closeMenu" })
+    isNuiMenuOpen = false
+    hidePreview()
+end
+
+local lastMenuOpenAttempt = 0
+
+--- Input thread — disable weapon/camera/frontend controls while NUI is open
+local function startMenuInputThread()
+    CreateThread(function()
+        while isNuiMenuOpen do
+            Wait(0)
+
+            -- Disable mouse look so cursor moves freely without rotating camera
+            DisableControlAction(0, 1, true)   -- LOOK_LR
+            DisableControlAction(0, 2, true)   -- LOOK_UD
+            DisableControlAction(0, 106, true) -- VEH_MOUSE_CONTROL_OVERRIDE
+
+            -- Disable weapon actions so clicking NUI doesn't fire
+            DisableControlAction(0, 24, true)  -- ATTACK
+            DisableControlAction(0, 25, true)  -- AIM
+            DisableControlAction(0, 257, true) -- ATTACK2
+
+            -- Disable frontend controls to prevent game-side actions
+            -- NUI has focus, JS handles all keyboard navigation directly
+            DisableControlAction(0, 172, true) -- UP
+            DisableControlAction(0, 173, true) -- DOWN
+            DisableControlAction(0, 174, true) -- LEFT
+            DisableControlAction(0, 175, true) -- RIGHT
+            DisableControlAction(0, 176, true) -- SELECT (Enter)
+            DisableControlAction(0, 177, true) -- CANCEL (Backspace)
+            DisableControlAction(0, 200, true) -- PAUSE (Esc)
+        end
+    end)
+end
+
+function OpenEmoteMenu()
+    local now = GetGameTimer()
+    if now - lastMenuOpenAttempt < 200 then return end
+    lastMenuOpenAttempt = now
+
+    -- Toggle off if already open
+    if isNuiMenuOpen then
+        CloseNUIMenu()
+        return
+    end
+
+    local canEmote, errorMsg = canPlayerEmote()
+    if not canEmote then
+        TriggerEvent('chat:addMessage', {
+            color = {255, 0, 0},
+            multiline = true,
+            args = {"RPEmotes", errorMsg}
+        })
+        return
+    end
+
+    local placementState = GetPlacementState()
+    if placementState == PlacementState.PREVIEWING or placementState == PlacementState.WALKING then return end
+
+    -- Build payload (rebuild if cache invalidated)
+    if not cachedPayload then
+        cachedPayload = buildMenuPayload()
+    else
+        -- Always refresh dynamic data
+        cachedPayload.keybinds = buildKeybindData()
+        cachedPayload.emojis = buildEmojiData()
+        cachedPayload.config = getRelevantConfig()
+    end
+
+    SetNuiFocus(true, true)
+    SetNuiFocusKeepInput(true)
+    SendNUIMessage(cachedPayload)
+    isNuiMenuOpen = true
+    startMenuInputThread()
+end
+
+-- ─── Rebuild functions (called from other files) ───
+
 function InitMenu()
+    -- Wait for all dependent systems to load
     while not (GetFavoriteEmotes and EmojiData and WalkMenuStart and GetKeyForCommand) do
         Wait(100)
     end
-
-    addEmoteMenu(mainMenu)
-    addCancelEmote(mainMenu)
-    if Config.Keybinding then
-        keybindMenu = addKeybindMenu(mainMenu)
-    end
-    favoriteMenu = addFavoritesMenu(mainMenu)
-    if Config.WalkingStylesEnabled then
-        addWalkMenu(mainMenu)
-    end
-    if Config.ExpressionsEnabled then
-        addFaceMenu(mainMenu)
-    end
-    if shouldShowEmojiMenu() then
-        addEmojiMenu(mainMenu)
-    end
-
-    mainMenu.OnIndexChange = function()
-        onMenuItemHover(mainMenu)
-    end
-
-    mainMenu.OnMenuChanged = function(oldMenu, newMenu, forward)
-        onMenuItemHover(newMenu)
-    end
-
-    mainMenu.OnMenuClosed = function()
-        ClosePedMenu()
-    end
-    _menuPool:RefreshIndex()
+    -- NUI doesn't need pre-built menus; just mark as initialized
+    cachedPayload = nil
+    DebugPrint("[rpemotes] NUI menu system initialized")
 end
 
 function RebuildEmoteMenu()
-    -- Close all menus if open
-    if _menuPool:IsAnyMenuOpen() then
-        _menuPool:CloseAllMenus()
+    cachedPayload = nil  -- Invalidate cache so next open rebuilds
+    if isNuiMenuOpen then
+        -- Rebuild and resend if menu is currently open
+        cachedPayload = buildMenuPayload()
+        SendNUIMessage(cachedPayload)
     end
-
-    -- Clear all submenus from the main menu
-    for i = #mainMenu.Items, 1, -1 do
-        mainMenu:RemoveItemAt(i)
-    end
-
-    -- Reset main menu selection to avoid index out of bounds
-    mainMenu.ActiveItem = 1000
-
-    -- Clear the subMenus tracking table
-    subMenus = {}
-
-    -- Rebuild the menu
-    InitMenu()
-
     DebugPrint("Menu rebuilt for model compatibility")
 end
 
 function RebuildKeybindEmoteMenu()
-    if not Config.Keybinding or not keybindMenu then
+    if not Config.Keybinding then return end
+    if isNuiMenuOpen then
+        SendNUIMessage({
+            action = "updateKeybinds",
+            keybinds = buildKeybindData(),
+        })
+    end
+end
+
+-- Favorites are managed by NUI LocalStorage, no rebuild needed
+function RebuildFavoritesEmoteMenu() end
+
+-- Compatibility stubs for other files that reference these
+function CloseAllMenus()
+    if isNuiMenuOpen then
+        CloseNUIMenu()
+    end
+end
+
+function GetCurrentlyVisibleMenu()
+    -- Return a stub for Placement.lua compatibility
+    -- Placement.lua stores the result, hides it (Visible(false)), then restores it (Visible(true))
+    if isNuiMenuOpen then
+        return { Visible = function(self, val)
+            if val == false then
+                -- Hide NUI but don't fully close (keep state for restoration)
+                SetNuiFocus(false, false)
+                SendNUIMessage({ action = "closeMenu" })
+                isNuiMenuOpen = false
+            elseif val == true then
+                -- Restore the NUI menu
+                OpenEmoteMenu()
+            end
+        end }
+    end
+    return nil
+end
+
+function ProcessEmoteMenu()
+    -- NUI handles its own event loop; this is a no-op
+    -- Placement.lua calls this to restart menu processing after placement
+    if not isNuiMenuOpen then return end
+end
+
+-- ─── NUI Callbacks ───
+
+RegisterNUICallback('closeMenu', function(_, cb)
+    CloseNUIMenu()
+    cb({})
+end)
+
+RegisterNUICallback('playEmote', function(data, cb)
+    handleEmoteSelection(data.name, data.emoteType, data.textureVariation)
+    cb({})
+end)
+
+RegisterNUICallback('playSharedEmote', function(data, cb)
+    SendSharedEmoteRequest(data.name)
+    cb({})
+end)
+
+RegisterNUICallback('groupEmote', function(data, cb)
+    OnGroupEmoteRequest(data.name)
+    cb({})
+end)
+
+RegisterNUICallback('placeEmote', function(data, cb)
+    if Config.PlacementEnabled then
+        StartNewPlacement(data.name)
+    end
+    cb({})
+end)
+
+-- Favorites are now handled entirely in NUI LocalStorage
+
+RegisterNUICallback('assignKeybind', function(data, cb)
+    EmoteBindStart({data.slot, data.emoteName, data.label, data.emoteType})
+    -- Send updated keybinds back to NUI
+    local updatedKeybinds = buildKeybindData()
+    SendNUIMessage({
+        action = "updateKeybinds",
+        keybinds = updatedKeybinds,
+    })
+    cb({ keybinds = updatedKeybinds })
+end)
+
+RegisterNUICallback('clearKeybind', function(data, cb)
+    DeleteEmoteBind({data.slot})
+    -- Send updated keybinds back to NUI
+    local updatedKeybinds = buildKeybindData()
+    SendNUIMessage({
+        action = "updateKeybinds",
+        keybinds = updatedKeybinds,
+    })
+    cb({ keybinds = updatedKeybinds })
+end)
+
+RegisterNUICallback('setWalkStyle', function(data, cb)
+    if data.reset then
+        ResetWalk()
+        DeleteResourceKvp("walkstyle")
+    else
+        if not HasEmotePermission(data.name, EmoteType.WALKS) then
+            EmoteChatMessage("You don't have permission to use this walk")
+            cb({})
+            return
+        end
+        WalkMenuStart(data.name)
+    end
+    cb({})
+end)
+
+RegisterNUICallback('setExpression', function(data, cb)
+    if data.reset then
+        DeleteResourceKvp(EmoteType.EXPRESSIONS)
+        ClearFacialIdleAnimOverride(PlayerPedId())
+    else
+        if not HasEmotePermission(data.name, EmoteType.EXPRESSIONS) then
+            EmoteChatMessage("You don't have permission to use this expression")
+            cb({})
+            return
+        end
+        EmoteMenuStart(data.name, nil, EmoteType.EXPRESSIONS)
+    end
+    cb({})
+end)
+
+RegisterNUICallback('showEmoji', function(data, cb)
+    ShowEmoji(data.name)
+    cb({})
+end)
+
+RegisterNUICallback('previewEmote', function(data, cb)
+    local emoteName = data.name
+    local emoteType = data.emoteType
+
+    if not Config.PreviewPed then
+        cb({})
         return
     end
 
-    if _menuPool:IsAnyMenuOpen() then
-        _menuPool:CloseAllMenus()
+    -- Check if previewable
+    if not isEmoteTypePreviewable(emoteType) then
+        cb({})
+        return
     end
 
-    -- Clear all the items from the menu
-    for i = #keybindMenu.menu.Items, 1, -1 do
-        keybindMenu.menu:RemoveItemAt(i)
+    -- Same emote already previewing
+    if LastEmote.name == emoteName and hasClonedPed() then
+        cb({})
+        return
     end
 
-    -- Reset menu selection to avoid index out of bounds
-    keybindMenu.menu.ActiveItem = 1000
+    local needsZoom = getPreviewZoomForEmoteType(emoteType)
 
-    -- Rebuild the menu
-    keybindMenu = addKeybindMenu()
-
-    DebugPrint("Keybind Menu rebuilt at runtime")
-end
-
-function RebuildFavoritesEmoteMenu()
-    local cacheActiveItem = favoriteMenu.menu:CurrentSelection()
-    -- Clear all the items from the menu
-    for i = #favoriteMenu.menu.Items, 1, -1 do
-        favoriteMenu.menu:RemoveItemAt(i)
+    -- If zoom state changed, recreate ped
+    if hasClonedPed() and currentZoomState ~= needsZoom then
+        ClosePedMenu()
     end
-    favoriteMenu.items = {}
 
-    -- Reset menu selection to avoid index out of bounds
-    favoriteMenu.menu.ActiveItem = 1000
+    -- Clear previous preview
+    if hasClonedPed() then
+        ClearPedTaskPreview()
+    end
 
-    -- Rebuild the menu
-    favoriteMenu = addFavoritesMenu()
-    if #favoriteMenu.items > 0 then
-        if favoriteMenu.items[cacheActiveItem] then
-            -- There is still an item at the cached index, so select it.
-            favoriteMenu.menu:CurrentSelection(cacheActiveItem)
-        else
-            -- If there are no items at the cached index, select the last item in the menu.
-            favoriteMenu.menu:CurrentSelection(#favoriteMenu.items)
-        end
+    -- Update preview state
+    LastEmote = {
+        name = emoteName,
+        emoteType = emoteType,
+    }
 
-        -- We use the internal NativeUI functions to simulate a menu update.
-        -- Otherwise NativeUI wont't be able to update the menu, until the player does any action,
-        -- because :CurrentSelection() function doesn't update it by default.
-        if favoriteMenu.menu.ActiveItem > 1 then
-            favoriteMenu.menu:GoUp()
-        else
-            favoriteMenu.menu:GoDown()
-        end
+    if hasClonedPed() then
+        EmoteMenuStartClone(emoteName, emoteType)
     else
-        -- No emotes to select. Clear the cached emote data.
-        CurrentMenuSelection = {}
+        currentZoomState = needsZoom
+        ShowPedMenu(needsZoom)
+        WaitForClonedPedThenPlayLastAnim()
     end
 
-    DebugPrint("Favorite Menu rebuilt at runtime")
-end
+    cb({})
+end)
+
+RegisterNUICallback('stopPreview', function(_, cb)
+    hidePreview()
+    cb({})
+end)
+
+RegisterNUICallback('cancelEmote', function(_, cb)
+    EmoteCancel()
+    DestroyAllProps()
+    cb({})
+end)
+
+-- Search focus: temporarily give full keyboard to NUI so typing works
+RegisterNUICallback('searchFocus', function(_, cb)
+    SetNuiFocusKeepInput(false)
+    cb({})
+end)
+
+-- Search blur: restore KeepInput so game gets keyboard again
+RegisterNUICallback('searchBlur', function(_, cb)
+    if isNuiMenuOpen then
+        SetNuiFocusKeepInput(true)
+    end
+    cb({})
+end)
+
+-- ─── Data initialization thread ───
 
 CreateThread(function()
     LoadAddonEmotes()
     convertRP()
 
     -- Request permissions from server before creating menu
-    -- The menu will be initialized when permissions are received in Utils.lua
     TriggerServerEvent('rpemotes:server:requestPermissions')
     DebugPrint("[rpemotes] Requested permission manifest from server")
 end)
+
+-- ─── Idle cam monitoring thread ───
 
 local idleCamActive = false
 
 CreateThread(function()
     while true do
         Wait(500)
-        -- While ped is dead or swimming, don't show menus
+        -- While ped is dead or swimming, close menus
         local canEmote, _ = canPlayerEmote()
         if not canEmote then
             if IsInAnimation then
                 EmoteCancel()
             end
-            _menuPool:CloseAllMenus()
-            ClosePedMenu()  -- Clean up the preview ped
+            if isNuiMenuOpen then
+                CloseNUIMenu()
+            end
         end
 
-        if Config.PreviewPed then
+        if Config.PreviewPed and isNuiMenuOpen then
             local camIsIdle = IsCinematicIdleCamRendering()
 
             if not idleCamActive and camIsIdle then
                 idleCamActive = true
-
                 ClosePedMenu()
             elseif idleCamActive and not camIsIdle then
                 idleCamActive = false
-
-                if _menuPool:IsAnyMenuOpen() then
-                    -- Only recreate ped if it doesn't exist
-                    if not hasClonedPed() then
-                        ShowPedMenu()
-
-                        if LastEmote.name then
-                            WaitForClonedPedThenPlayLastAnim()
-                        end
-                    end
+                if LastEmote.name and not hasClonedPed() then
+                    currentZoomState = getPreviewZoomForEmoteType(LastEmote.emoteType)
+                    ShowPedMenu(currentZoomState)
+                    WaitForClonedPedThenPlayLastAnim()
                 end
             end
         end
     end
 end)
 
+-- ─── Wait for cloned ped thread ───
+
 function WaitForClonedPedThenPlayLastAnim()
-    -- Prevent multiple concurrent threads
-    if isWaitingForPed then
-        return
-    end
+    if isWaitingForPed then return end
 
     isWaitingForPed = true
     CreateThread(function()
@@ -1273,35 +962,4 @@ function WaitForClonedPedThenPlayLastAnim()
 
         isWaitingForPed = false
     end)
-end
-
-function CloseAllMenus() _menuPool:CloseAllMenus() end
-
-function GetCurrentlyVisibleMenu()
-    for _, menu in pairs(_menuPool.Menus) do
-        if menu:Visible() then
-            return menu
-        end
-    end
-end
-
-function ProcessEmoteMenu()
-    if isMenuProcessing then return end
-    isMenuProcessing = true
-    if _menuPool:IsAnyMenuOpen() then
-        local currentMenu = GetCurrentlyVisibleMenu()
-        if currentMenu then
-            currentMenu:UpdateScaleform()
-        end
-    end
-    while _menuPool:IsAnyMenuOpen() do
-        _menuPool:ProcessMenus()
-        DisableControlAction(0, 36, true) -- Ducking, to not conflict with group emotes keybind
-        if Config.DisableCombatInMenu then
-            DisableControlAction(2, 25, true)
-            DisablePlayerFiring(PlayerId(), true)
-        end
-        Wait(0)
-    end
-    isMenuProcessing = false
 end

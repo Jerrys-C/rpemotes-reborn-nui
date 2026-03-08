@@ -411,6 +411,7 @@ function ShowPedMenu(zoom)
     if not Config.PreviewPed then return end
 
     if not ShowPed then
+        ShowPed = true
         CreateThread(function()
             local playerPed = PlayerPedId()
             local coords = GetEntityCoords(playerPed) - vector3(0.0, 0.0, 10.0)
@@ -425,8 +426,6 @@ function ShowPedMenu(zoom)
             SetEntityAlpha(ClonedPed, 254, false)
             SetEntityCollision(ClonedPed, false, false)
             SetPedCanBeTargetted(ClonedPed, false)
-
-            ShowPed = true
 
             local positionBuffer = {}
             local bufferSize = 5
@@ -474,10 +473,11 @@ end
 function ClosePedMenu()
     if not Config.PreviewPed then return end
 
+    ShowPed = false
     if ClonedPed then
-        ShowPed = false
         ClearPedTaskPreview()
         DeleteEntity(ClonedPed)
+        ClonedPed = nil
     end
 end
 
