@@ -54,3 +54,42 @@ end
 
 _ = Translate
 _U = TranslateCap
+
+-- ─── Emote Label Translation System ───
+
+local EmoteLocales = {}
+
+local function LoadEmoteLocale(language)
+    if EmoteLocales[language] then return end
+    local status, result = pcall(function()
+        local path = ('locales/emotes/%s.lua'):format(language)
+        local chunk = LoadResourceFile(GetCurrentResourceName(), path)
+        if chunk then
+            local localeTable = assert(load(chunk, ('=@%s'):format(path)))()
+            if type(localeTable) == "table" then
+                EmoteLocales[language] = localeTable
+            end
+        end
+    end)
+    if not status then
+        print(("^1ERROR^7: Failed to load emote locale ^5%s^7: %s"):format(language, result))
+    end
+end
+
+--- Translates an emote label. Returns nil if no translation found (caller uses default).
+---@param emoteName string
+---@return string|nil
+function TranslateEmoteLabel(emoteName)
+    local lang = Config.MenuLanguage
+    LoadEmoteLocale(lang)
+    if EmoteLocales[lang] and EmoteLocales[lang][emoteName] then
+        return EmoteLocales[lang][emoteName]
+    end
+    if lang ~= "en" then
+        LoadEmoteLocale("en")
+        if EmoteLocales["en"] and EmoteLocales["en"][emoteName] then
+            return EmoteLocales["en"][emoteName]
+        end
+    end
+    return nil
+end

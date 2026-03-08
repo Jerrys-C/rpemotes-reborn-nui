@@ -19,6 +19,7 @@ files {
     'conditionalanims.meta',
     'header.png',
     'locales/*.lua',
+    'locales/emotes/*.lua',
     'html/index.html',
     'html/css/*.css',
     'html/js/*.js',

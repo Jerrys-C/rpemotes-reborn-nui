@@ -206,6 +206,10 @@ local function convertToEmoteData(emoteName, emote)
         emote.label = emote[3]
     end
 
+    -- Apply emote label translation
+    local translated = TranslateEmoteLabel(emoteName)
+    if translated then emote.label = translated end
+
     local animOptions = emote.AnimationOptions
     if animOptions and not animOptions.onFootFlag then
         if animOptions.EmoteMoving then
@@ -264,6 +268,8 @@ local function convertRP()
                 end
                 emoteData.anim = emoteData[1]
                 emoteData.label = emoteData[2] or emoteName
+                local translatedExpr = TranslateEmoteLabel(emoteName)
+                if translatedExpr then emoteData.label = translatedExpr end
                 ExpressionData[emoteName] = emoteData
             elseif emoteType == EmoteType.WALKS then
                 if WalkData[emoteName] then
@@ -271,6 +277,8 @@ local function convertRP()
                 end
                 emoteData.anim = emoteData[1]
                 emoteData.label = emoteData[2] or emoteName
+                local translatedWalk = TranslateEmoteLabel(emoteName)
+                if translatedWalk then emoteData.label = translatedWalk end
                 WalkData[emoteName] = emoteData
             elseif emoteType == EmoteType.SHARED then
                 if SharedEmoteData[emoteName] then
