@@ -36,6 +36,7 @@ const Store = {
         this.translations = data.translations || {};
         this.searchTerm = '';
 
+        this._buildLabelMap();
         this._buildCategoryOrder();
         const saved = localStorage.getItem(this._LS_PREFIX + 'category');
         this.currentCategory = (saved && this.categoryOrder.includes(saved))
@@ -70,6 +71,26 @@ const Store = {
         }
         if (this.emojis.length > 0) {
             this.categoryOrder.push(this.EMOJIS);
+        }
+    },
+
+    _labelMap: {},
+
+    _buildLabelMap() {
+        this._labelMap = {};
+        for (const emotes of Object.values(this.categories)) {
+            for (const e of emotes) {
+                this._labelMap[e.emoteType + '_' + e.name] = e.label || e.name;
+            }
+        }
+        for (const w of this.walks) {
+            this._labelMap['Walks_' + w.name] = w.label || w.name;
+        }
+        for (const e of this.expressions) {
+            this._labelMap['Expressions_' + e.name] = e.label || e.name;
+        }
+        for (const ej of this.emojis) {
+            this._labelMap['Emojis_' + ej.name] = ej.label || ej.name;
         }
     },
 
@@ -219,6 +240,8 @@ const Store = {
 
     _enrichItem(item) {
         const e = { ...item };
+        const liveLabel = this._labelMap[e.emoteType + '_' + e.name];
+        if (liveLabel) e.label = liveLabel;
         switch (e.emoteType) {
             case 'Walks':       e._isWalk = true; break;
             case 'Expressions': e._isExpression = true; break;
