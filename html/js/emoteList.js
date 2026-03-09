@@ -472,6 +472,24 @@ const EmoteList = {
         this._scrollToSelected();
     },
 
+    navigateLeft() {
+        const total = Store.filteredItems.length;
+        if (total === 0) return;
+        this._selectedIndex = this._selectedIndex > 0
+            ? this._selectedIndex - 1
+            : total - 1;
+        this._scrollToSelected();
+    },
+
+    navigateRight() {
+        const total = Store.filteredItems.length;
+        if (total === 0) return;
+        this._selectedIndex = this._selectedIndex < total - 1
+            ? this._selectedIndex + 1
+            : 0;
+        this._scrollToSelected();
+    },
+
     activateSelected() {
         const items = Store.filteredItems;
         if (this._selectedIndex < 0 || this._selectedIndex >= items.length) return;

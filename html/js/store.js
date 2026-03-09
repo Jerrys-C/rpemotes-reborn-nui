@@ -13,6 +13,10 @@ const Store = {
     filteredItems: [],
     isOpen: false,
     categoryOrder: [],
+    activeWalk: '',
+    activeWalkLabel: '',
+    activeExpression: '',
+    activeExpressionLabel: '',
 
     FAVORITES: '__favorites__',
     KEYBINDS: '__keybinds__',
@@ -35,6 +39,10 @@ const Store = {
         this.config = data.config || {};
         this.translations = data.translations || {};
         this.searchTerm = '';
+        this.activeWalk = data.activeWalk || '';
+        this.activeWalkLabel = data.activeWalkLabel || '';
+        this.activeExpression = data.activeExpression || '';
+        this.activeExpressionLabel = data.activeExpressionLabel || '';
 
         this._buildLabelMap();
         this._buildCategoryOrder();

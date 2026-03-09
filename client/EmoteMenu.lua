@@ -600,8 +600,36 @@ end
 
 --- Build the full menu payload for NUI
 ---@return table
-local function buildMenuPayload()
+--- Reverse-lookup expression name from stored anim string
+local function getActiveExpressionName()
+    local anim = GetResourceKvpString("expression")
+    if not anim or anim == "" then return nil end
+    for name, data in pairs(ExpressionData) do
+        if type(data) == "table" and data.anim == anim then return name end
+    end
+    return nil
+end
+
+--- Build active walk/expression status for NUI
+local function buildActiveStatus()
+    local walkName = GetResourceKvpString("walkstyle")
+    local exprName = getActiveExpressionName()
     return {
+        activeWalk = walkName or "",
+        activeWalkLabel = walkName and (WalkData[walkName] and WalkData[walkName].label or walkName) or "",
+        activeExpression = exprName or "",
+        activeExpressionLabel = exprName and (ExpressionData[exprName] and ExpressionData[exprName].label or exprName) or "",
+    }
+end
+
+local function sendActiveStatus()
+    local status = buildActiveStatus()
+    status.action = "updateStatus"
+    SendNUIMessage(status)
+end
+
+local function buildMenuPayload()
+    local payload = {
         action = "openMenu",
         categories = buildCategories(),
         keybinds = buildKeybindData(),
@@ -611,6 +639,9 @@ local function buildMenuPayload()
         config = getRelevantConfig(),
         translations = getTranslations(),
     }
+    local status = buildActiveStatus()
+    for k, v in pairs(status) do payload[k] = v end
+    return payload
 end
 
 -- ─── Menu Open/Close ───
@@ -641,7 +672,6 @@ local function startMenuInputThread()
             DisableControlAction(0, 257, true) -- ATTACK2
 
             -- Disable frontend controls to prevent game-side actions
-            -- NUI has focus, JS handles all keyboard navigation directly
             DisableControlAction(0, 172, true) -- UP
             DisableControlAction(0, 173, true) -- DOWN
             DisableControlAction(0, 174, true) -- LEFT
@@ -685,6 +715,8 @@ function OpenEmoteMenu()
         cachedPayload.keybinds = buildKeybindData()
         cachedPayload.emojis = buildEmojiData()
         cachedPayload.config = getRelevantConfig()
+        local status = buildActiveStatus()
+        for k, v in pairs(status) do cachedPayload[k] = v end
     end
 
     SetNuiFocus(true, true)
@@ -826,12 +858,13 @@ RegisterNUICallback('setWalkStyle', function(data, cb)
         end
         WalkMenuStart(data.name)
     end
+    sendActiveStatus()
     cb({})
 end)
 
 RegisterNUICallback('setExpression', function(data, cb)
     if data.reset then
-        DeleteResourceKvp(EmoteType.EXPRESSIONS)
+        DeleteResourceKvp("expression")
         ClearFacialIdleAnimOverride(PlayerPedId())
     else
         if not HasEmotePermission(data.name, EmoteType.EXPRESSIONS) then
@@ -841,6 +874,7 @@ RegisterNUICallback('setExpression', function(data, cb)
         end
         EmoteMenuStart(data.name, nil, EmoteType.EXPRESSIONS)
     end
+    sendActiveStatus()
     cb({})
 end)
 

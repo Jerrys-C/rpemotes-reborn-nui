@@ -68,6 +68,7 @@ const App = {
     _sidebarEl: null,
     _footerEl: null,
     _titleEl: null,
+    _statusEl: null,
     _drag: { active: false, startX: 0, startY: 0, startLeft: 0, startTop: 0, savedPos: null },
 
     init() {
@@ -75,6 +76,7 @@ const App = {
         this._sidebarEl = document.getElementById('sidebar');
         this._footerEl = document.getElementById('menu-footer');
         this._titleEl = document.getElementById('category-title');
+        this._statusEl = document.getElementById('status-bar');
 
         Toast.init();
         EmoteList.init();
@@ -103,6 +105,18 @@ const App = {
                     if (!inSearch) {
                         e.preventDefault();
                         EmoteList.navigateDown();
+                    }
+                    break;
+                case 'ArrowLeft':
+                    if (!inSearch) {
+                        e.preventDefault();
+                        EmoteList.navigateLeft();
+                    }
+                    break;
+                case 'ArrowRight':
+                    if (!inSearch) {
+                        e.preventDefault();
+                        EmoteList.navigateRight();
                     }
                     break;
                 case 'Enter':
@@ -137,6 +151,13 @@ const App = {
                 Store.updateKeybinds(d.keybinds);
                 this._refreshView();
                 break;
+            case 'updateStatus':
+                Store.activeWalk = d.activeWalk || '';
+                Store.activeWalkLabel = d.activeWalkLabel || '';
+                Store.activeExpression = d.activeExpression || '';
+                Store.activeExpressionLabel = d.activeExpressionLabel || '';
+                this._updateStatusBar();
+                break;
             case 'navigate':
                 this._handleNavigate(d.direction);
                 break;
@@ -155,6 +176,7 @@ const App = {
         this._buildSidebar();
         this._buildFooter();
         this._updateCategoryTitle();
+        this._updateStatusBar();
 
         this._applyDragPosition();
         this._menuEl.classList.remove('hidden');
@@ -324,6 +346,61 @@ const App = {
         this._footerEl.textContent = h.join(' \u00B7 ');
     },
 
+    _updateStatusBar() {
+        if (!this._statusEl) return;
+        this._statusEl.replaceChildren();
+
+        const hasWalk = !!Store.activeWalk;
+        const hasExpr = !!Store.activeExpression;
+        if (!hasWalk && !hasExpr) return;
+
+        const card = document.createElement('div');
+        card.className = 'status-card';
+
+        if (hasWalk) {
+            card.appendChild(this._createStatusItem(
+                'fa-solid fa-person-walking', '#30D158',
+                Store.activeWalkLabel || Store.activeWalk,
+                () => { NUI.resetWalkStyle(); }
+            ));
+        }
+        if (hasExpr) {
+            card.appendChild(this._createStatusItem(
+                'fa-solid fa-face-meh', '#5E5CE6',
+                Store.activeExpressionLabel || Store.activeExpression,
+                () => { NUI.resetExpression(); }
+            ));
+        }
+
+        this._statusEl.appendChild(card);
+    },
+
+    _createStatusItem(iconClass, iconColor, label, onReset) {
+        const item = document.createElement('div');
+        item.className = 'status-item';
+
+        const icon = document.createElement('i');
+        icon.className = 'status-item-icon ' + iconClass;
+        icon.style.color = iconColor;
+        item.appendChild(icon);
+
+        const lbl = document.createElement('span');
+        lbl.className = 'status-item-label';
+        lbl.textContent = label;
+        item.appendChild(lbl);
+
+        const btn = document.createElement('button');
+        btn.className = 'status-item-reset';
+        btn.textContent = '\u00D7';
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            onReset();
+        });
+        item.appendChild(btn);
+
+        return item;
+    },
+
     showKeybindModal(item) {
         const modal = document.getElementById('keybind-modal');
         const title = document.getElementById('keybind-modal-title');
@@ -487,6 +564,8 @@ const App = {
         switch (direction) {
             case 'up':     EmoteList.navigateUp(); break;
             case 'down':   EmoteList.navigateDown(); break;
+            case 'left':   EmoteList.navigateLeft(); break;
+            case 'right':  EmoteList.navigateRight(); break;
             case 'select': EmoteList.activateSelected(); break;
             case 'back':   NUI.closeMenu(); break;
         }
