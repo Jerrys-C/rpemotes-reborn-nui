@@ -281,8 +281,11 @@ const EmoteList = {
         card.oncontextmenu = (e) => {
             e.preventDefault();
             const id = item.emoteType + '_' + item.name;
-            Store.toggleFavorite(id, { name: item.name, label: item.label || item.name, emoteType: item.emoteType });
+            const isNowFav = Store.toggleFavorite(id, { name: item.name, label: item.label || item.name, emoteType: item.emoteType });
             card.classList.toggle('favorited', Store.isFavorite(item.name, item.emoteType));
+            const label = item.label || item.name;
+            const tkey = isNowFav ? 'addedtofavorites' : 'removedfromfavorites';
+            Toast.show(Store.t(tkey).replace('%s', label), isNowFav ? 'success' : 'info');
             if (Store.currentCategory === Store.FAVORITES) {
                 App.updateSidebar();
                 this.render();

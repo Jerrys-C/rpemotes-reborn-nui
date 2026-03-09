@@ -1,3 +1,64 @@
+const TOAST_ICONS = {
+    success: 'fa-solid fa-circle-check',
+    error:   'fa-solid fa-circle-xmark',
+    warning: 'fa-solid fa-triangle-exclamation',
+    info:    'fa-solid fa-circle-info',
+};
+
+const Toast = {
+    MAX: 4,
+    DEFAULT_MS: 3500,
+    _el: null,
+
+    init() {
+        this._el = document.getElementById('toast-container');
+    },
+
+    show(msg, type = 'info', ms = this.DEFAULT_MS) {
+        if (!this._el || !msg) return;
+        type = TOAST_ICONS[type] ? type : 'info';
+
+        // Drop oldest when at limit
+        while (this._el.children.length >= this.MAX) {
+            this._drop(this._el.lastElementChild);
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+
+        const icon = document.createElement('i');
+        icon.className = 'toast-icon ' + TOAST_ICONS[type];
+        toast.appendChild(icon);
+
+        const span = document.createElement('span');
+        span.className = 'toast-msg';
+        span.textContent = msg;
+        toast.appendChild(span);
+
+        const bar = document.createElement('div');
+        bar.className = 'toast-bar';
+        bar.style.animationDuration = ms + 'ms';
+        toast.appendChild(bar);
+
+        toast.addEventListener('click', () => this._drop(toast));
+        toast._timer = setTimeout(() => this._drop(toast), ms);
+
+        this._el.prepend(toast);
+    },
+
+    _drop(el) {
+        if (!el || !el.parentNode) return;
+        clearTimeout(el._timer);
+        el.classList.add('toast-leaving');
+        el.addEventListener('animationend', () => el.remove(), { once: true });
+    },
+
+    clear() {
+        if (!this._el) return;
+        for (const el of Array.from(this._el.children)) this._drop(el);
+    }
+};
+
 const App = {
     _menuEl: null,
     _sidebarEl: null,
@@ -11,6 +72,7 @@ const App = {
         this._footerEl = document.getElementById('menu-footer');
         this._titleEl = document.getElementById('category-title');
 
+        Toast.init();
         EmoteList.init();
         Search.init();
 
@@ -66,6 +128,7 @@ const App = {
         switch (d.action) {
             case 'openMenu':      this._openMenu(d); break;
             case 'closeMenu':     this._closeMenu(); break;
+            case 'showToast':     Toast.show(d.msg, d.toastType, d.duration); break;
             case 'updateKeybinds':
                 Store.updateKeybinds(d.keybinds);
                 this._refreshView();
@@ -100,6 +163,7 @@ const App = {
         Store.isOpen = false;
         Search.clear();
         EmoteList.stopPreview();
+        Toast.clear();
     },
 
     _refreshView() {

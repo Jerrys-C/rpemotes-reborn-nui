@@ -11,6 +11,24 @@ ExpressionData = {}
 WalkData = {}
 
 local isNuiMenuOpen = false
+
+--- Send toast notifications to NUI; fall back to SimpleNotify when the menu is not open
+---@param msg string
+---@param toastType? string "success"|"error"|"warning"|"info"
+---@param duration? number milliseconds, default 3500
+function ShowToast(msg, toastType, duration)
+    local clean = string.gsub(tostring(msg), "~%a+~", "")
+    if isNuiMenuOpen then
+        SendNUIMessage({
+            action    = "showToast",
+            msg       = clean,
+            toastType = toastType or "info",
+            duration  = duration,
+        })
+    else
+        SimpleNotify(msg)
+    end
+end
 local isWaitingForPed = false
 local cachedPayload = nil
 local currentZoomState = false
@@ -142,9 +160,9 @@ function SendSharedEmoteRequest(emoteName)
     local target, distance = GetClosestPlayer()
     if (distance ~= -1 and distance < 3) then
         TriggerServerEvent("rpemotes:server:requestEmote", GetPlayerServerId(target), emoteName)
-        SimpleNotify(Translate('sentrequestto') .. GetPlayerName(target))
+        ShowToast(Translate('sentrequestto') .. GetPlayerName(target), 'success')
     else
-        SimpleNotify(Translate('nobodyclose'))
+        ShowToast(Translate('nobodyclose'), 'warning')
     end
 end
 
@@ -155,7 +173,7 @@ local function handleEmoteSelection(emoteName, emoteType, textureVariation)
     if not emote then return end
 
     if not HasEmotePermission(emoteName, emoteType) then
-        EmoteChatMessage("You don't have permission to use this emote")
+        ShowToast("You don't have permission to use this emote", 'error')
         return
     end
 
@@ -800,7 +818,7 @@ RegisterNUICallback('setWalkStyle', function(data, cb)
         DeleteResourceKvp("walkstyle")
     else
         if not HasEmotePermission(data.name, EmoteType.WALKS) then
-            EmoteChatMessage("You don't have permission to use this walk")
+            ShowToast("You don't have permission to use this walk", 'error')
             cb({})
             return
         end
@@ -815,7 +833,7 @@ RegisterNUICallback('setExpression', function(data, cb)
         ClearFacialIdleAnimOverride(PlayerPedId())
     else
         if not HasEmotePermission(data.name, EmoteType.EXPRESSIONS) then
-            EmoteChatMessage("You don't have permission to use this expression")
+            ShowToast("You don't have permission to use this expression", 'error')
             cb({})
             return
         end

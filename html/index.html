@@ -21,6 +21,7 @@
                             <line x1="16.5" y1="16.5" x2="21" y2="21" stroke="currentColor" stroke-width="2"/>
                         </svg>
                         <input type="text" id="search-input" autocomplete="off" spellcheck="false" />
+                        <button id="search-clear" class="search-clear hidden" type="button">&times;</button>
                     </div>
                     <button id="close-btn" title="Close">&times;</button>
                 </div>
@@ -44,6 +45,8 @@
                 <button id="keybind-cancel" class="modal-cancel"></button>
             </div>
         </div>
+
+        <div id="toast-container" aria-live="polite"></div>
     </div>
 
     <script src="js/nui.js"></script>
