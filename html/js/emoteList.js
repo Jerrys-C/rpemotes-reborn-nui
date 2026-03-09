@@ -351,6 +351,7 @@ const EmoteList = {
     },
 
     _handleItemClick(item, e) {
+        this.stopPreview();
         if (e.shiftKey && !item._isWalk && !item._isExpression && !item._isEmoji) {
             NUI.placeEmote(item.name);
             return;
@@ -412,6 +413,7 @@ const EmoteList = {
 
             const value = option.dataset.value;
             this._closeVariantDropdown();
+            this.stopPreview();
             this._previewSuppressedUntil = Date.now() + 800;
 
             if (value === '__default__') {
