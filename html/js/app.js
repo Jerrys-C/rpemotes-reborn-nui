@@ -140,11 +140,6 @@ const App = {
     },
 
     _shortLabel(cat) {
-        if (cat === Store.FAVORITES)   return 'Fav';
-        if (cat === Store.KEYBINDS)    return 'Keys';
-        if (cat === Store.WALKS)       return 'Walk';
-        if (cat === Store.EXPRESSIONS) return 'Mood';
-        if (cat === Store.EMOJIS)      return 'Emoji';
         const full = Store.getCategoryLabel(cat);
         const clean = full.replace(/^[\p{Emoji}\p{Emoji_Component}\s]+/u, '');
         return (clean || full).slice(0, 6);
