@@ -375,11 +375,20 @@ const App = {
         const cancelBtn = document.getElementById('list-cancel-btn');
         const deleteBtn = document.getElementById('list-delete-btn');
 
+        const iconEl = document.getElementById('list-modal-icon');
+
         title.textContent = isEdit ? (Store.t('editlist') || 'Edit List') : (Store.t('newlist') || 'New List');
         nameInput.value = isEdit ? list.name : '';
         nameInput.placeholder = Store.t('listname') || 'List name';
 
         let selectedColor = isEdit ? list.color : this._LIST_COLORS[0];
+
+        const updateIconColor = (c) => {
+            iconEl.style.background = c + '1A';
+            iconEl.style.color = c;
+        };
+        updateIconColor(selectedColor);
+
         colors.replaceChildren();
         for (const c of this._LIST_COLORS) {
             const dot = document.createElement('div');
@@ -389,6 +398,7 @@ const App = {
             dot.addEventListener('click', () => {
                 selectedColor = c;
                 colors.querySelectorAll('.color-dot').forEach(d => d.classList.toggle('active', d === dot));
+                updateIconColor(c);
             });
             colors.appendChild(dot);
         }
@@ -423,12 +433,7 @@ const App = {
 
         deleteBtn.onclick = () => {
             if (!this._listModalState.listId) return;
-            Store.deleteCustomList(this._listModalState.listId);
-            this.hideListModal();
-            this._buildSidebar();
-            this._setActiveCategory(Store.currentCategory);
-            this._updateCategoryTitle();
-            EmoteList.render();
+            this._showDeleteConfirm(nameInput.value.trim() || list.name);
         };
 
         nameInput.onfocus = () => NUI.searchFocus();
@@ -440,8 +445,42 @@ const App = {
 
     hideListModal() {
         document.getElementById('list-modal').classList.add('hidden');
+        document.getElementById('list-modal-form').classList.remove('hidden');
+        document.getElementById('list-confirm-delete').classList.add('hidden');
         this._listModalState = null;
         NUI.searchBlur();
+    },
+
+    _showDeleteConfirm(listName) {
+        const form = document.getElementById('list-modal-form');
+        const confirm = document.getElementById('list-confirm-delete');
+        const title = document.getElementById('list-confirm-title');
+        const msg = document.getElementById('list-confirm-msg');
+        const backBtn = document.getElementById('list-confirm-back');
+        const yesBtn = document.getElementById('list-confirm-yes');
+
+        title.textContent = (Store.t('deletelist') || 'Delete') + ' "' + listName + '"?';
+        msg.textContent = Store.t('cannotundo') || 'This action cannot be undone.';
+        backBtn.textContent = Store.t('btn_back') || 'Cancel';
+        yesBtn.textContent = Store.t('confirmdelete') || 'Delete';
+
+        form.classList.add('hidden');
+        confirm.classList.remove('hidden');
+
+        backBtn.onclick = () => {
+            confirm.classList.add('hidden');
+            form.classList.remove('hidden');
+        };
+
+        yesBtn.onclick = () => {
+            if (!this._listModalState || !this._listModalState.listId) return;
+            Store.deleteCustomList(this._listModalState.listId);
+            this.hideListModal();
+            this._buildSidebar();
+            this._setActiveCategory(Store.currentCategory);
+            this._updateCategoryTitle();
+            EmoteList.render();
+        };
     },
 
     _handleNavigate(direction) {

@@ -33,12 +33,17 @@ const EmoteList = {
     _variantDropdownCloseHandler: null,
     _contextMenu: null,
     _contextMenuCloseHandler: null,
+    _tooltipEl: null,
 
     init() {
         this._scrollEl = document.getElementById('content-scroll');
         this._gridEl = document.getElementById('emote-grid');
 
         SmoothScroll.init(this._scrollEl);
+
+        this._tooltipEl = document.createElement('div');
+        this._tooltipEl.className = 'cmd-tooltip';
+        document.getElementById('emote-menu').appendChild(this._tooltipEl);
 
         this._scrollEl.addEventListener('mousemove', (e) => {
             this._lastMouseX = e.clientX;
@@ -86,6 +91,7 @@ const EmoteList = {
         this._cancelPendingHover();
         this._closeVariantDropdown();
         this._closeContextMenu();
+        this._hideTooltip();
         this._clearRenderedCards();
         this._hideEmptyState();
         this._gridEl.style.height = '0px';
@@ -122,6 +128,7 @@ const EmoteList = {
         this._lastEnd = end;
         this._previewSuppressedUntil = Date.now() + 300;
         this._cancelPendingHover();
+        this._hideTooltip();
 
         if (this._postScrollTimer) clearTimeout(this._postScrollTimer);
         this._postScrollTimer = setTimeout(() => {
@@ -219,9 +226,9 @@ const EmoteList = {
         card.onmouseleave = null;
         card.className = 'emote-card';
         card.removeAttribute('data-index');
+        card.removeAttribute('data-cmd');
         card.style.top = '';
         card.style.left = '';
-        card.title = '';
     },
 
     _acquireCard() {
@@ -284,8 +291,8 @@ const EmoteList = {
         lbl.textContent = item.label || item.name;
         card.appendChild(lbl);
 
-        if (item._isWalk) card.title = '/walk ' + item.name.toLowerCase();
-        else if (!item._isExpression && !item._isEmoji) card.title = '/e ' + item.name;
+        const cmd = this._getCommand(item);
+        if (cmd) card.dataset.cmd = cmd;
 
         if (item.propVariations && item.propVariations.length > 0) {
             const variant = document.createElement('span');
@@ -317,6 +324,7 @@ const EmoteList = {
         };
 
         card.onmouseenter = () => {
+            this._showTooltip(card);
             this._cancelPendingHover();
 
             if (item._isWalk || item._isEmoji || item.hasPermission === false) return;
@@ -343,6 +351,7 @@ const EmoteList = {
         };
 
         card.onmouseleave = () => {
+            this._hideTooltip();
             this._cancelPendingHover();
             const bar = card.querySelector('.preview-progress');
             if (bar) bar.remove();
@@ -384,6 +393,7 @@ const EmoteList = {
 
     _showPropVariantMenu(cardEl, item) {
         this._closeVariantDropdown();
+        this._hideTooltip();
 
         const dropdown = document.createElement('div');
         dropdown.className = 'variant-dropdown';
@@ -514,11 +524,52 @@ const EmoteList = {
         }, 500);
     },
 
+    // ── Tooltip ──
+
+    _getCommand(item) {
+        if (item._isKeybind || item._isEmoji) return null;
+        if (item._isWalk) return '/walk ' + item.name.toLowerCase();
+        if (item._isExpression) return '/mood ' + item.name.toLowerCase();
+        return '/e ' + item.name;
+    },
+
+    _showTooltip(card) {
+        const cmd = card.dataset.cmd;
+        if (!cmd) { this._hideTooltip(); return; }
+
+        this._tooltipEl.textContent = cmd;
+        this._tooltipEl.classList.add('visible');
+
+        const panelRect = document.getElementById('emote-menu').getBoundingClientRect();
+        const cardRect = card.getBoundingClientRect();
+
+        let x = cardRect.left + cardRect.width / 2 - panelRect.left;
+        let y = cardRect.bottom - panelRect.top + 4;
+
+        requestAnimationFrame(() => {
+            if (!this._tooltipEl.classList.contains('visible')) return;
+            const tw = this._tooltipEl.offsetWidth;
+            const th = this._tooltipEl.offsetHeight;
+            x = Math.max(tw / 2 + 4, Math.min(panelRect.width - tw / 2 - 4, x));
+            if (y + th > panelRect.height - 4) y = cardRect.top - panelRect.top - th - 4;
+            this._tooltipEl.style.left = x + 'px';
+            this._tooltipEl.style.top = y + 'px';
+        });
+
+        this._tooltipEl.style.left = x + 'px';
+        this._tooltipEl.style.top = y + 'px';
+    },
+
+    _hideTooltip() {
+        if (this._tooltipEl) this._tooltipEl.classList.remove('visible');
+    },
+
     // ── Context Menu ──
 
     _showContextMenu(e, item, card) {
         this._closeContextMenu();
         this._closeVariantDropdown();
+        this._hideTooltip();
 
         const menu = document.createElement('div');
         menu.className = 'ctx-menu';
@@ -545,6 +596,30 @@ const EmoteList = {
             this._closeContextMenu();
         });
         menu.appendChild(favItem);
+
+        // Copy command
+        const ctxCmd = this._getCommand(item);
+        if (ctxCmd) {
+            const copyItem = this._createCtxItem(
+                'fa-regular fa-copy',
+                Store.t('copycommand') || 'Copy Command',
+                null
+            );
+            copyItem.addEventListener('click', () => {
+                navigator.clipboard.writeText(ctxCmd).catch(() => {
+                    const ta = document.createElement('textarea');
+                    ta.value = ctxCmd;
+                    ta.style.cssText = 'position:fixed;opacity:0';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    document.execCommand('copy');
+                    ta.remove();
+                });
+                Toast.show((Store.t('copiedcommand') || 'Copied') + ': ' + ctxCmd, 'success');
+                this._closeContextMenu();
+            });
+            menu.appendChild(copyItem);
+        }
 
         // Custom lists
         const listIds = Object.keys(Store.customLists);

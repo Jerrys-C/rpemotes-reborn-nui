@@ -122,4 +122,8 @@ return {
     ['emptylist'] = "Right-click emotes to add them here",
     ['addedtolist'] = "~g~%s~s~ added to %l",
     ['removedfromlist'] = "~g~%s~s~ removed from %l",
+    ['confirmdelete'] = "Delete",
+    ['cannotundo'] = "This action cannot be undone.",
+    ['copycommand'] = "Copy Command",
+    ['copiedcommand'] = "Copied",
 }

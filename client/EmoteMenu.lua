@@ -589,6 +589,7 @@ local function getTranslations()
         'addedtofavorites', 'removedfromfavorites', 'btn_rightclick',
         'newlist', 'editlist', 'deletelist', 'createlist', 'savelist',
         'listname', 'maxlists', 'emptylist', 'addedtolist', 'removedfromlist',
+        'confirmdelete', 'cannotundo', 'copycommand', 'copiedcommand',
     }
     local t = {}
     for _, key in ipairs(keys) do

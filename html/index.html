@@ -47,13 +47,33 @@
         </div>
 
         <div id="list-modal" class="modal hidden">
-            <div class="modal-content">
-                <h3 id="list-modal-title"></h3>
-                <input type="text" id="list-name-input" class="list-name-input" maxlength="20" autocomplete="off" spellcheck="false" />
-                <div id="list-color-picker" class="color-picker"></div>
-                <button id="list-save-btn" class="list-save-btn"></button>
-                <button id="list-cancel-btn" class="modal-cancel"></button>
-                <button id="list-delete-btn" class="list-delete-btn hidden"></button>
+            <div class="modal-content list-modal-content">
+                <div id="list-modal-form">
+                    <div class="list-modal-header">
+                        <div id="list-modal-icon" class="list-modal-icon">
+                            <i class="fa-solid fa-folder"></i>
+                        </div>
+                        <h3 id="list-modal-title"></h3>
+                    </div>
+                    <input type="text" id="list-name-input" class="list-name-input" maxlength="20" autocomplete="off" spellcheck="false" />
+                    <div id="list-color-picker" class="color-picker"></div>
+                    <div class="list-modal-actions">
+                        <button id="list-cancel-btn" class="list-btn list-btn-cancel"></button>
+                        <button id="list-save-btn" class="list-btn list-btn-save"></button>
+                    </div>
+                    <button id="list-delete-btn" class="list-btn-delete hidden"></button>
+                </div>
+                <div id="list-confirm-delete" class="list-confirm hidden">
+                    <div class="list-confirm-icon">
+                        <i class="fa-solid fa-trash"></i>
+                    </div>
+                    <p class="list-confirm-title" id="list-confirm-title"></p>
+                    <p class="list-confirm-msg" id="list-confirm-msg"></p>
+                    <div class="list-modal-actions">
+                        <button id="list-confirm-back" class="list-btn list-btn-cancel"></button>
+                        <button id="list-confirm-yes" class="list-btn list-btn-danger"></button>
+                    </div>
+                </div>
             </div>
         </div>
 
