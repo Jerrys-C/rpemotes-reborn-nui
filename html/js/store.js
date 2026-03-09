@@ -1,6 +1,7 @@
 const Store = {
     categories: {},
     favorites: {},
+    customLists: {},
     keybinds: [],
     walks: [],
     expressions: [],
@@ -18,12 +19,15 @@ const Store = {
     WALKS: '__walks__',
     EXPRESSIONS: '__expressions__',
     EMOJIS: '__emojis__',
+    CUSTOM_PREFIX: '__custom_',
+    MAX_CUSTOM_LISTS: 10,
     _LS_PREFIX: 'rpemotes:',
     _GTA_CODE_RE: /~[a-zA-Z]~/g,
 
     init(data) {
         this.categories = data.categories || {};
         this.favorites = this._loadFavorites();
+        this.customLists = this._loadCustomLists();
         this.keybinds = data.keybinds || [];
         this.walks = data.walks || [];
         this.expressions = data.expressions || [];
@@ -45,6 +49,10 @@ const Store = {
     _buildCategoryOrder() {
         this.categoryOrder = [];
         this.categoryOrder.push(this.FAVORITES);
+
+        for (const id of Object.keys(this.customLists)) {
+            this.categoryOrder.push(id);
+        }
 
         const catNames = Object.keys(this.categories);
         for (const name of catNames) {
@@ -70,6 +78,10 @@ const Store = {
     },
 
     getCategoryLabel(cat) {
+        if (this.isCustomList(cat)) {
+            const list = this.customLists[cat];
+            return list ? list.name : 'List';
+        }
         if (cat === this.FAVORITES) return this._strip(this.translations.favorites || 'Favorites');
         if (cat === this.KEYBINDS) return this._strip(this.translations.keybinds || 'Keybinds');
         if (cat === this.WALKS) return this._strip(this.translations.walkingstyles || 'Walk Styles');
@@ -79,6 +91,7 @@ const Store = {
     },
 
     getCategoryIcon(cat) {
+        if (this.isCustomList(cat))   return 'fa-solid fa-folder';
         if (cat === this.FAVORITES)   return 'fa-solid fa-star';
         if (cat === this.KEYBINDS)    return 'fa-solid fa-keyboard';
         if (cat === this.WALKS)       return 'fa-solid fa-person-walking';
@@ -95,6 +108,10 @@ const Store = {
     },
 
     getCategoryColor(cat) {
+        if (this.isCustomList(cat)) {
+            const list = this.customLists[cat];
+            return list ? list.color : '#8E8E93';
+        }
         if (cat === this.FAVORITES)   return '#FFD60A';
         if (cat === this.KEYBINDS)    return '#64D2FF';
         if (cat === this.WALKS)       return '#30D158';
@@ -156,7 +173,10 @@ const Store = {
         const cat = this.currentCategory;
 
         if (cat === this.FAVORITES) {
-            this.filteredItems = Object.values(this.favorites);
+            this.filteredItems = Object.values(this.favorites).map(e => this._enrichItem(e));
+        } else if (this.isCustomList(cat)) {
+            const list = this.customLists[cat];
+            this.filteredItems = list ? Object.values(list.emotes).map(e => this._enrichItem(e)) : [];
         } else if (cat === this.KEYBINDS) {
             this.filteredItems = this.keybinds.map(kb => ({
                 name: kb.emoteName || '',
@@ -195,6 +215,16 @@ const Store = {
         } else {
             this.filteredItems = [];
         }
+    },
+
+    _enrichItem(item) {
+        const e = { ...item };
+        switch (e.emoteType) {
+            case 'Walks':       e._isWalk = true; break;
+            case 'Expressions': e._isExpression = true; break;
+            case 'Emojis':      e._isEmoji = true; break;
+        }
+        return e;
     },
 
     _matchesSearch(emote, term) {
@@ -239,5 +269,69 @@ const Store = {
 
     t(key) {
         return this._strip(this.translations[key] || key);
+    },
+
+    // ── Custom Lists ──
+
+    isCustomList(cat) {
+        return typeof cat === 'string' && cat.startsWith(this.CUSTOM_PREFIX);
+    },
+
+    _loadCustomLists() {
+        try {
+            return JSON.parse(localStorage.getItem(this._LS_PREFIX + 'custom_lists')) || {};
+        } catch { return {}; }
+    },
+
+    _saveCustomLists() {
+        localStorage.setItem(this._LS_PREFIX + 'custom_lists', JSON.stringify(this.customLists));
+    },
+
+    createCustomList(name, color) {
+        const id = this.CUSTOM_PREFIX + Date.now();
+        this.customLists[id] = { name, color, emotes: {} };
+        this._saveCustomLists();
+        this._buildCategoryOrder();
+        return id;
+    },
+
+    updateCustomList(id, name, color) {
+        const list = this.customLists[id];
+        if (!list) return;
+        list.name = name;
+        list.color = color;
+        this._saveCustomLists();
+    },
+
+    deleteCustomList(id) {
+        delete this.customLists[id];
+        this._saveCustomLists();
+        this._buildCategoryOrder();
+        if (this.currentCategory === id) {
+            this.currentCategory = this.FAVORITES;
+            localStorage.setItem(this._LS_PREFIX + 'category', this.FAVORITES);
+            this._updateFilteredItems();
+        }
+    },
+
+    toggleCustomListItem(listId, emoteId, data) {
+        const list = this.customLists[listId];
+        if (!list) return false;
+        if (list.emotes[emoteId]) {
+            delete list.emotes[emoteId];
+        } else {
+            list.emotes[emoteId] = data;
+        }
+        this._saveCustomLists();
+        if (this.currentCategory === listId) {
+            this._updateFilteredItems();
+        }
+        return !!list.emotes[emoteId];
+    },
+
+    isInCustomList(listId, name, emoteType) {
+        const list = this.customLists[listId];
+        if (!list) return false;
+        return !!list.emotes[emoteType + '_' + name];
     }
 };

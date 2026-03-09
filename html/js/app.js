@@ -174,7 +174,10 @@ const App = {
     _buildSidebar() {
         this._sidebarEl.replaceChildren();
 
-        for (const cat of Store.categoryOrder) {
+        let lastCustomIdx = -1;
+
+        for (let i = 0; i < Store.categoryOrder.length; i++) {
+            const cat = Store.categoryOrder[i];
             const item = document.createElement('div');
             item.className = 'sidebar-item';
             if (cat === Store.currentCategory) item.classList.add('active');
@@ -199,7 +202,33 @@ const App = {
                 EmoteList.stopPreview();
             });
 
+            if (Store.isCustomList(cat)) {
+                lastCustomIdx = i;
+                item.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.showListModal(cat);
+                });
+            }
+
             this._sidebarEl.appendChild(item);
+        }
+
+        // "+" button after favorites / custom lists
+        const addItem = document.createElement('div');
+        addItem.className = 'sidebar-item sidebar-add';
+        const addIcon = document.createElement('i');
+        addIcon.className = 'sidebar-icon fa-solid fa-plus';
+        addIcon.style.color = 'var(--text-tertiary)';
+        addItem.appendChild(addIcon);
+        addItem.addEventListener('click', () => this.showListModal());
+
+        const insertAfterIdx = lastCustomIdx >= 0 ? lastCustomIdx + 1 : 1;
+        const refNode = this._sidebarEl.children[insertAfterIdx];
+        if (refNode) {
+            this._sidebarEl.insertBefore(addItem, refNode);
+        } else {
+            this._sidebarEl.appendChild(addItem);
         }
     },
 
@@ -247,7 +276,13 @@ const App = {
             this._titleEl.appendChild(span);
         }
 
-        if (cat === Store.WALKS) {
+        if (Store.isCustomList(cat)) {
+            const btn = document.createElement('button');
+            btn.className = 'reset-btn';
+            btn.textContent = Store.t('editlist') || 'Edit';
+            btn.addEventListener('click', () => this.showListModal(cat));
+            this._titleEl.appendChild(btn);
+        } else if (cat === Store.WALKS) {
             const btn = document.createElement('button');
             btn.className = 'reset-btn';
             btn.textContent = Store.t('normalreset') || 'Reset';
@@ -264,6 +299,10 @@ const App = {
 
     _getCategoryCount(cat) {
         if (cat === Store.FAVORITES) return Object.keys(Store.favorites).length;
+        if (Store.isCustomList(cat)) {
+            const list = Store.customLists[cat];
+            return list ? Object.keys(list.emotes).length : 0;
+        }
         if (cat === Store.KEYBINDS)  return Store.keybinds.length;
         if (cat === Store.WALKS)     return Store.walks.length;
         if (cat === Store.EXPRESSIONS) return Store.expressions.length;
@@ -275,7 +314,7 @@ const App = {
     _buildFooter() {
         const h = [];
         h.push(Store.t('btn_select') || 'Click / Enter: Select');
-        h.push(Store.t('btn_set_favorite') || 'Right-click: Fav');
+        h.push(Store.t('btn_rightclick') || 'Right-click: Menu');
         h.push('\u2191\u2193 Nav');
         if (Store.config.keybindingEnabled) h.push(Store.t('btn_setkeybind') || 'Mid-click: Bind');
         this._footerEl.textContent = h.join(' \u00B7 ');
@@ -308,6 +347,97 @@ const App = {
 
     hideKeybindModal() {
         document.getElementById('keybind-modal').classList.add('hidden');
+    },
+
+    // ── Custom List Modal ──
+
+    _listModalState: null,
+    _LIST_COLORS: ['#FF453A', '#FF9F0A', '#FFD60A', '#30D158', '#64D2FF', '#0A84FF', '#5E5CE6', '#FF375F'],
+
+    showListModal(listId, autoAddItem) {
+        const isEdit = !!listId;
+        const list = isEdit ? Store.customLists[listId] : null;
+
+        if (!isEdit && Object.keys(Store.customLists).length >= Store.MAX_CUSTOM_LISTS) {
+            Toast.show(Store.t('maxlists') || 'Maximum number of lists reached', 'warning');
+            return;
+        }
+
+        const modal = document.getElementById('list-modal');
+        const title = document.getElementById('list-modal-title');
+        const nameInput = document.getElementById('list-name-input');
+        const colors = document.getElementById('list-color-picker');
+        const saveBtn = document.getElementById('list-save-btn');
+        const cancelBtn = document.getElementById('list-cancel-btn');
+        const deleteBtn = document.getElementById('list-delete-btn');
+
+        title.textContent = isEdit ? (Store.t('editlist') || 'Edit List') : (Store.t('newlist') || 'New List');
+        nameInput.value = isEdit ? list.name : '';
+        nameInput.placeholder = Store.t('listname') || 'List name';
+
+        let selectedColor = isEdit ? list.color : this._LIST_COLORS[0];
+        colors.replaceChildren();
+        for (const c of this._LIST_COLORS) {
+            const dot = document.createElement('div');
+            dot.className = 'color-dot';
+            if (c === selectedColor) dot.classList.add('active');
+            dot.style.background = c;
+            dot.addEventListener('click', () => {
+                selectedColor = c;
+                colors.querySelectorAll('.color-dot').forEach(d => d.classList.toggle('active', d === dot));
+            });
+            colors.appendChild(dot);
+        }
+
+        deleteBtn.classList.toggle('hidden', !isEdit);
+        deleteBtn.textContent = Store.t('deletelist') || 'Delete';
+        saveBtn.textContent = isEdit ? (Store.t('savelist') || 'Save') : (Store.t('createlist') || 'Create');
+        cancelBtn.textContent = Store.t('btn_back') || 'Cancel';
+
+        this._listModalState = { listId, autoAddItem };
+
+        saveBtn.onclick = () => {
+            const name = nameInput.value.trim();
+            if (!name) return;
+            if (this._listModalState.listId) {
+                Store.updateCustomList(this._listModalState.listId, name, selectedColor);
+            } else {
+                const id = Store.createCustomList(name, selectedColor);
+                if (this._listModalState.autoAddItem) {
+                    const it = this._listModalState.autoAddItem;
+                    Store.toggleCustomListItem(id, it.emoteType + '_' + it.name, {
+                        name: it.name, label: it.label || it.name, emoteType: it.emoteType
+                    });
+                }
+            }
+            this.hideListModal();
+            this._buildSidebar();
+            this._updateCategoryTitle();
+        };
+
+        cancelBtn.onclick = () => this.hideListModal();
+
+        deleteBtn.onclick = () => {
+            if (!this._listModalState.listId) return;
+            Store.deleteCustomList(this._listModalState.listId);
+            this.hideListModal();
+            this._buildSidebar();
+            this._setActiveCategory(Store.currentCategory);
+            this._updateCategoryTitle();
+            EmoteList.render();
+        };
+
+        nameInput.onfocus = () => NUI.searchFocus();
+        nameInput.onblur = () => NUI.searchBlur();
+
+        modal.classList.remove('hidden');
+        nameInput.focus();
+    },
+
+    hideListModal() {
+        document.getElementById('list-modal').classList.add('hidden');
+        this._listModalState = null;
+        NUI.searchBlur();
     },
 
     _handleNavigate(direction) {

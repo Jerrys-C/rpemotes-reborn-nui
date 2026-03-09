@@ -564,36 +564,37 @@ local function getRelevantConfig()
     }
 end
 
+--- Raw locale lookup (no string.format) – safe for strings with %s placeholders
+---@param key string
+---@return string
+local function TranslateRaw(key)
+    local lang = Locales[Config.MenuLanguage]
+    if lang and lang[key] then return lang[key] end
+    if Config.MenuLanguage ~= "en" and Locales["en"] and Locales["en"][key] then
+        return Locales["en"][key]
+    end
+    return key
+end
+
 --- Get translations for NUI
 ---@return table
 local function getTranslations()
-    return {
-        emotes = Translate('emotes'),
-        danceemotes = Translate('danceemotes'),
-        animalemotes = Translate('animalemotes'),
-        propemotes = Translate('propemotes'),
-        shareemotes = Translate('shareemotes'),
-        cancelemote = Translate('cancelemote'),
-        walkingstyles = Translate('walkingstyles'),
-        moods = Translate('moods'),
-        favorites = Translate('favorites'),
-        keybinds = Translate('keybinds'),
-        emojis = Translate('emojis'),
-        searchemotes = Translate('searchemotes'),
-        searchnoresult = Translate('searchnoresult'),
-        normalreset = Translate('normalreset'),
-        resetdef = Translate('resetdef'),
-        btn_select = Translate('btn_select'),
-        btn_back = Translate('btn_back'),
-        btn_place = Translate('btn_place'),
-        btn_set_favorite = Translate('btn_set_favorite'),
-        btn_remove_favorite = Translate('btn_remove_favorite'),
-        btn_setkeybind = Translate('btn_setkeybind'),
-        btn_delkeybind = Translate('btn_delkeybind'),
-        btn_groupselect = Translate('btn_groupselect'),
-        cancelemoteinfo = Translate('cancelemoteinfo'),
-        favoritesinfo = Translate('favoritesinfo'),
+    local keys = {
+        'emotes', 'danceemotes', 'animalemotes', 'propemotes', 'shareemotes',
+        'cancelemote', 'walkingstyles', 'moods', 'favorites', 'keybinds', 'emojis',
+        'searchemotes', 'searchnoresult', 'normalreset', 'resetdef',
+        'btn_select', 'btn_back', 'btn_place',
+        'btn_set_favorite', 'btn_remove_favorite', 'btn_setkeybind', 'btn_delkeybind',
+        'btn_groupselect', 'cancelemoteinfo', 'favoritesinfo',
+        'addedtofavorites', 'removedfromfavorites', 'btn_rightclick',
+        'newlist', 'editlist', 'deletelist', 'createlist', 'savelist',
+        'listname', 'maxlists', 'emptylist', 'addedtolist', 'removedfromlist',
     }
+    local t = {}
+    for _, key in ipairs(keys) do
+        t[key] = TranslateRaw(key)
+    end
+    return t
 end
 
 --- Build the full menu payload for NUI

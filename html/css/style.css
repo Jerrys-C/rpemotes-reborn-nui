@@ -662,3 +662,162 @@ body {
     from { width: 100%; }
     to   { width: 0; }
 }
+
+/* ─── Context Menu ─── */
+
+.ctx-menu {
+    position: absolute;
+    z-index: 200;
+    min-width: 10rem;
+    background: rgba(36, 36, 38, 0.98);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: 0 0.5rem 2rem rgba(0, 0, 0, 0.5);
+    padding: 0.25rem;
+    animation: ctxFadeIn 0.12s ease;
+}
+
+@keyframes ctxFadeIn {
+    from { opacity: 0; transform: scale(0.96); }
+    to   { opacity: 1; transform: scale(1); }
+}
+
+.ctx-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.5rem;
+    border-radius: 0.25rem;
+    cursor: pointer;
+    font-size: 0.75rem;
+    transition: background 0.12s ease;
+}
+
+.ctx-item:hover {
+    background: var(--accent-dim);
+}
+
+.ctx-icon {
+    width: 1rem;
+    text-align: center;
+    font-size: 0.6875rem;
+    flex-shrink: 0;
+}
+
+.ctx-label {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ctx-check {
+    font-size: 0.625rem;
+    color: var(--accent);
+    flex-shrink: 0;
+}
+
+.ctx-divider {
+    height: 1px;
+    background: var(--border);
+    margin: 0.25rem 0.5rem;
+}
+
+/* ─── Sidebar Add Button ─── */
+
+.sidebar-add {
+    opacity: 0.35;
+    transition: opacity var(--transition), background var(--transition);
+}
+
+.sidebar-add:hover {
+    opacity: 0.8;
+}
+
+/* ─── List Modal ─── */
+
+.list-name-input {
+    width: 100%;
+    padding: 0.4375rem 0.625rem;
+    background: var(--bg-input);
+    border: 1px solid transparent;
+    border-radius: var(--radius);
+    color: var(--text);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    outline: none;
+    margin-bottom: 0.75rem;
+    transition: border-color var(--transition);
+}
+
+.list-name-input:focus {
+    border-color: var(--border-active);
+}
+
+.list-name-input::placeholder {
+    color: var(--text-tertiary);
+}
+
+.color-picker {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 0.875rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.color-dot {
+    width: 1.25rem;
+    height: 1.25rem;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: border-color var(--transition), transform var(--transition);
+}
+
+.color-dot:hover {
+    transform: scale(1.15);
+}
+
+.color-dot.active {
+    border-color: var(--text);
+}
+
+.list-save-btn {
+    display: block;
+    width: 100%;
+    padding: 0.4375rem;
+    background: var(--accent-dim);
+    border: 1px solid var(--border-active);
+    border-radius: var(--radius);
+    color: var(--accent);
+    font-size: 0.8125rem;
+    font-family: inherit;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.list-save-btn:hover {
+    background: rgba(10, 132, 255, 0.25);
+}
+
+.list-delete-btn {
+    display: block;
+    width: 100%;
+    padding: 0.4375rem;
+    margin-top: 0.375rem;
+    background: rgba(255, 69, 58, 0.08);
+    border: 1px solid rgba(255, 69, 58, 0.1);
+    border-radius: var(--radius);
+    color: #FF6961;
+    font-size: 0.8125rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.list-delete-btn:hover {
+    background: rgba(255, 69, 58, 0.2);
+    color: #FF453A;
+}

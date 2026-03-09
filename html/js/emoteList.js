@@ -22,18 +22,28 @@ const EmoteList = {
     _hoverTimer: null,
     _activePreviewKey: null,
     _previewSuppressedUntil: 0,
+    _postScrollTimer: null,
+    _lastMouseX: 0,
+    _lastMouseY: 0,
     _selectedIndex: 0,
     _renderedCards: new Map(),
     _cardPool: [],
     _emptyEl: null,
     _variantDropdown: null,
     _variantDropdownCloseHandler: null,
+    _contextMenu: null,
+    _contextMenuCloseHandler: null,
 
     init() {
         this._scrollEl = document.getElementById('content-scroll');
         this._gridEl = document.getElementById('emote-grid');
 
         SmoothScroll.init(this._scrollEl);
+
+        this._scrollEl.addEventListener('mousemove', (e) => {
+            this._lastMouseX = e.clientX;
+            this._lastMouseY = e.clientY;
+        });
 
         this._scrollEl.addEventListener('scroll', () => {
             if (this._scrollRAF) return;
@@ -75,6 +85,7 @@ const EmoteList = {
         this._previewSuppressedUntil = Date.now() + 250;
         this._cancelPendingHover();
         this._closeVariantDropdown();
+        this._closeContextMenu();
         this._clearRenderedCards();
         this._hideEmptyState();
         this._gridEl.style.height = '0px';
@@ -112,6 +123,12 @@ const EmoteList = {
         this._previewSuppressedUntil = Date.now() + 300;
         this._cancelPendingHover();
 
+        if (this._postScrollTimer) clearTimeout(this._postScrollTimer);
+        this._postScrollTimer = setTimeout(() => {
+            this._postScrollTimer = null;
+            this._recheckHoverAtMouse();
+        }, 350);
+
         for (const [index, card] of Array.from(this._renderedCards.entries())) {
             if (index < start || index >= end) {
                 this._recycleCard(index, card);
@@ -144,7 +161,9 @@ const EmoteList = {
 
         this._emptyEl.textContent = Store.searchTerm
             ? (Store.t('searchnoresult') + ' "' + Store.searchTerm + '"')
-            : 'No items';
+            : Store.isCustomList(Store.currentCategory)
+                ? (Store.t('emptylist') || 'Right-click emotes to add them here')
+                : 'No items';
         this._gridEl.style.height = Math.max(this._scrollEl.clientHeight, 1) + 'px';
 
         if (this._emptyEl.parentNode !== this._gridEl || this._gridEl.childNodes.length !== 1) {
@@ -163,6 +182,13 @@ const EmoteList = {
             clearTimeout(this._hoverTimer);
             this._hoverTimer = null;
         }
+    },
+
+    _recheckHoverAtMouse() {
+        if (!Store.isOpen) return;
+        const el = document.elementFromPoint(this._lastMouseX, this._lastMouseY);
+        const card = el?.closest?.('.emote-card');
+        if (card && card.onmouseenter) card.onmouseenter();
     },
 
     _clearRenderedCards() {
@@ -280,16 +306,7 @@ const EmoteList = {
 
         card.oncontextmenu = (e) => {
             e.preventDefault();
-            const id = item.emoteType + '_' + item.name;
-            const isNowFav = Store.toggleFavorite(id, { name: item.name, label: item.label || item.name, emoteType: item.emoteType });
-            card.classList.toggle('favorited', Store.isFavorite(item.name, item.emoteType));
-            const label = item.label || item.name;
-            const tkey = isNowFav ? 'addedtofavorites' : 'removedfromfavorites';
-            Toast.show(Store.t(tkey).replace('%s', label), isNowFav ? 'success' : 'info');
-            if (Store.currentCategory === Store.FAVORITES) {
-                App.updateSidebar();
-                this.render();
-            }
+            this._showContextMenu(e, item, card);
         };
 
         card.onmousedown = (e) => {
@@ -493,5 +510,153 @@ const EmoteList = {
             this._activePreviewKey = previewKey;
             NUI.previewEmote(item.name, item.emoteType);
         }, 500);
+    },
+
+    // ── Context Menu ──
+
+    _showContextMenu(e, item, card) {
+        this._closeContextMenu();
+        this._closeVariantDropdown();
+
+        const menu = document.createElement('div');
+        menu.className = 'ctx-menu';
+
+        const emoteId = item.emoteType + '_' + item.name;
+        const emoteData = { name: item.name, label: item.label || item.name, emoteType: item.emoteType };
+
+        // Favorite toggle
+        const isFav = Store.isFavorite(item.name, item.emoteType);
+        const favItem = this._createCtxItem(
+            isFav ? 'fa-solid fa-star' : 'fa-regular fa-star',
+            isFav ? (Store.t('btn_remove_favorite') || 'Remove Favorite') : (Store.t('btn_set_favorite') || 'Add Favorite'),
+            isFav ? '#FFD60A' : null
+        );
+        favItem.addEventListener('click', () => {
+            const isNowFav = Store.toggleFavorite(emoteId, emoteData);
+            card.classList.toggle('favorited', isNowFav);
+            const tkey = isNowFav ? 'addedtofavorites' : 'removedfromfavorites';
+            Toast.show(Store.t(tkey).replace('%s', emoteData.label), isNowFav ? 'success' : 'info');
+            if (Store.currentCategory === Store.FAVORITES) {
+                App.updateSidebar();
+                this.render();
+            }
+            this._closeContextMenu();
+        });
+        menu.appendChild(favItem);
+
+        // Custom lists
+        const listIds = Object.keys(Store.customLists);
+        if (listIds.length > 0) {
+            menu.appendChild(this._createCtxDivider());
+            for (const listId of listIds) {
+                const list = Store.customLists[listId];
+                const isIn = Store.isInCustomList(listId, item.name, item.emoteType);
+                const listItem = this._createCtxItem(
+                    'fa-solid fa-folder',
+                    list.name,
+                    list.color,
+                    isIn
+                );
+                listItem.addEventListener('click', () => {
+                    const isNowIn = Store.toggleCustomListItem(listId, emoteId, emoteData);
+                    const msg = isNowIn
+                        ? (Store.t('addedtolist') || '%s added to %l').replace('%s', emoteData.label).replace('%l', list.name)
+                        : (Store.t('removedfromlist') || '%s removed from %l').replace('%s', emoteData.label).replace('%l', list.name);
+                    Toast.show(msg, isNowIn ? 'success' : 'info');
+                    if (Store.currentCategory === listId) {
+                        App.updateSidebar();
+                        this.render();
+                    }
+                    this._closeContextMenu();
+                });
+                menu.appendChild(listItem);
+            }
+        }
+
+        // New list option
+        menu.appendChild(this._createCtxDivider());
+        const newItem = this._createCtxItem(
+            'fa-solid fa-plus',
+            Store.t('newlist') || 'New List...',
+            null
+        );
+        newItem.addEventListener('click', () => {
+            this._closeContextMenu();
+            App.showListModal(null, item);
+        });
+        menu.appendChild(newItem);
+
+        // Position within #emote-menu
+        const panelEl = document.getElementById('emote-menu');
+        panelEl.appendChild(menu);
+
+        const panelRect = panelEl.getBoundingClientRect();
+        let x = e.clientX - panelRect.left;
+        let y = e.clientY - panelRect.top;
+
+        requestAnimationFrame(() => {
+            const ctxW = menu.offsetWidth;
+            const ctxH = menu.offsetHeight;
+            if (x + ctxW > panelRect.width - 4) x = panelRect.width - ctxW - 4;
+            if (y + ctxH > panelRect.height - 4) y = panelRect.height - ctxH - 4;
+            if (x < 4) x = 4;
+            if (y < 4) y = 4;
+            menu.style.left = x + 'px';
+            menu.style.top = y + 'px';
+        });
+
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+
+        this._contextMenu = menu;
+
+        setTimeout(() => {
+            this._contextMenuCloseHandler = (ev) => {
+                if (!menu.contains(ev.target)) {
+                    this._closeContextMenu();
+                }
+            };
+            document.addEventListener('mousedown', this._contextMenuCloseHandler, true);
+        }, 0);
+    },
+
+    _closeContextMenu() {
+        if (this._contextMenuCloseHandler) {
+            document.removeEventListener('mousedown', this._contextMenuCloseHandler, true);
+            this._contextMenuCloseHandler = null;
+        }
+        if (this._contextMenu) {
+            this._contextMenu.remove();
+            this._contextMenu = null;
+        }
+    },
+
+    _createCtxItem(iconClass, label, iconColor, checked) {
+        const item = document.createElement('div');
+        item.className = 'ctx-item';
+
+        const icon = document.createElement('i');
+        icon.className = 'ctx-icon ' + iconClass;
+        if (iconColor) icon.style.color = iconColor;
+        item.appendChild(icon);
+
+        const text = document.createElement('span');
+        text.className = 'ctx-label';
+        text.textContent = label;
+        item.appendChild(text);
+
+        if (checked) {
+            const check = document.createElement('i');
+            check.className = 'ctx-check fa-solid fa-check';
+            item.appendChild(check);
+        }
+
+        return item;
+    },
+
+    _createCtxDivider() {
+        const div = document.createElement('div');
+        div.className = 'ctx-divider';
+        return div;
     }
 };

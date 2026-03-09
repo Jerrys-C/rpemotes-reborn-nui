@@ -110,4 +110,16 @@ return {
     ['btn_remove_favorite'] = "Remove Favorite",
     ['addedtofavorites'] = "Emote (~g~%s~s~) added to favorites!",
     ['removedfromfavorites'] = "Emote (~g~%s~s~) removed from favorites!",
+    ['btn_rightclick'] = "Right-click: Menu",
+    -- Custom Lists
+    ['newlist'] = "New List...",
+    ['editlist'] = "Edit",
+    ['deletelist'] = "Delete",
+    ['createlist'] = "Create",
+    ['savelist'] = "Save",
+    ['listname'] = "List name",
+    ['maxlists'] = "Maximum number of lists reached",
+    ['emptylist'] = "Right-click emotes to add them here",
+    ['addedtolist'] = "~g~%s~s~ added to %l",
+    ['removedfromlist'] = "~g~%s~s~ removed from %l",
 }
