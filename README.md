@@ -1,4 +1,6 @@
 <img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/4c939484-1a0a-4772-afff-bb44aed6ea4a" />
+<img width="2036" height="1440" alt="Emotes" src="https://github.com/user-attachments/assets/e7c4a42f-b38b-48ea-8e0f-a29af70fd1f4" />
+<img width="2166" height="1440" alt="Actions" src="https://github.com/user-attachments/assets/4ecb0ad0-bf9c-4f25-bd26-bcfe405a489a" />
 
 ## NUI Interface
 
