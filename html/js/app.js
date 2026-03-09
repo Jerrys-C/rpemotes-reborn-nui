@@ -245,7 +245,6 @@ const App = {
         addItem.className = 'sidebar-item sidebar-add';
         const addIcon = document.createElement('i');
         addIcon.className = 'sidebar-icon fa-solid fa-plus';
-        addIcon.style.color = 'var(--text-tertiary)';
         addItem.appendChild(addIcon);
         addItem.addEventListener('click', () => this.showListModal());
 

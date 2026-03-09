@@ -20,6 +20,7 @@ const EmoteList = {
     _lastEnd: -1,
     _scrollRAF: null,
     _hoverTimer: null,
+    _activeProgressBar: null,
     _activePreviewKey: null,
     _previewSuppressedUntil: 0,
     _postScrollTimer: null,
@@ -189,6 +190,10 @@ const EmoteList = {
             clearTimeout(this._hoverTimer);
             this._hoverTimer = null;
         }
+        if (this._activeProgressBar) {
+            if (this._activeProgressBar.parentNode) this._activeProgressBar.remove();
+            this._activeProgressBar = null;
+        }
     },
 
     _recheckHoverAtMouse() {
@@ -336,10 +341,14 @@ const EmoteList = {
             const bar = document.createElement('div');
             bar.className = 'preview-progress';
             card.appendChild(bar);
+            this._activeProgressBar = bar;
 
             this._hoverTimer = setTimeout(() => {
                 this._hoverTimer = null;
-                if (bar.parentNode) bar.remove();
+                if (this._activeProgressBar) {
+                    if (this._activeProgressBar.parentNode) this._activeProgressBar.remove();
+                    this._activeProgressBar = null;
+                }
 
                 if (!Store.isOpen) return;
                 if (Date.now() < this._previewSuppressedUntil) return;
@@ -353,8 +362,6 @@ const EmoteList = {
         card.onmouseleave = () => {
             this._hideTooltip();
             this._cancelPendingHover();
-            const bar = card.querySelector('.preview-progress');
-            if (bar) bar.remove();
         };
 
     },

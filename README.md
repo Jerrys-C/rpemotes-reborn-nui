@@ -1,5 +1,20 @@
 <img width="1919" height="1079" alt="image" src="https://github.com/user-attachments/assets/4c939484-1a0a-4772-afff-bb44aed6ea4a" />
 
+## NUI Interface
+
+A modern NUI interface for rp-emotes-reborn.
+
+This project replaces the NativeUI menu with a responsive NUI interface, allowing players to easily browse, preview, and select emotes.
+
+**New Features**
+- Non-blocking gameplay — browse the menu without interrupting player controls
+- Global search for emotes, animations, and walk styles
+- Quick action buttons, custom lists, and favorites
+- Active walk style and expression display with one-click reset
+- Locale support for emote labels
+- All exports and other functionality are unchanged and expected to behave the same as before.
+
+---
 
 Rpemotes-reborn is a community-driven FiveM emote menu allowing players to express themselves in roleplay with custom animations, countless facial expressions, walk styles, and props.
 
