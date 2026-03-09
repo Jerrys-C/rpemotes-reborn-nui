@@ -49,6 +49,10 @@ const Toast = {
     _drop(el) {
         if (!el || !el.parentNode) return;
         clearTimeout(el._timer);
+        if (el.classList.contains('toast-leaving')) {
+            el.remove();
+            return;
+        }
         el.classList.add('toast-leaving');
         el.addEventListener('animationend', () => el.remove(), { once: true });
     },
