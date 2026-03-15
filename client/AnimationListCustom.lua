@@ -1,36 +1,29 @@
--- Emotes you add in the file will automatically be added to AnimationList.lua
--- If you have multiple custom list files they MUST be added between AnimationList.lua and Emote.lua in fxmanifest.lua!
--- Don't change 'CustomDP' it is local to this file!
+-- Addon Emote Loader Framework
+-- Drop .lua files into custom_emotes/ directory to auto-load custom animations.
+--
+-- Each file should have an ENABLED flag at the top:
+--   local ENABLED = true  -- set to false to disable this pack
+--   if not ENABLED then return end
 
--- Remove the } from the = {} then enter your own animation code ---
--- Don't forget to close the tables.
+---@type AnimationListConfig[]
+local AddonEmotesList = {}
 
----@type AnimationListConfig?
----@diagnostic disable-next-line: missing-fields
-local CustomDP = {}
-
-CustomDP.Expressions = {}
-CustomDP.Walks = {}
-CustomDP.Shared = {}
-CustomDP.Dances = {}
-CustomDP.AnimalEmotes = {}
-CustomDP.Exits = {}
-CustomDP.Emotes = {}
-CustomDP.PropEmotes = {}
-
------------------------------------------------------------------------------------------
---| I don't think you should change the code below unless you know what you are doing |--
------------------------------------------------------------------------------------------
+--- Register addon emote data to be merged into RP on load.
+---@param addonData AnimationListConfig
+function RegisterAddonEmotes(addonData)
+    AddonEmotesList[#AddonEmotesList + 1] = addonData
+end
 
 function LoadAddonEmotes()
-    assert(CustomDP ~= nil, 'Addon emotes can only be loaded once')
-    for arrayName, array in pairs(CustomDP) do
-        if RP[arrayName] then
-            for emoteName, emoteData in pairs(array) do
-                RP[arrayName][emoteName] = emoteData
+    for _, addon in ipairs(AddonEmotesList) do
+        for arrayName, array in pairs(addon) do
+            if RP[arrayName] then
+                for emoteName, emoteData in pairs(array) do
+                    RP[arrayName][emoteName] = emoteData
+                end
             end
         end
     end
-    -- Free memory
-    CustomDP = nil
+
+    AddonEmotesList = nil
 end

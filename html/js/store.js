@@ -173,9 +173,12 @@ const Store = {
 
         if (term) {
             this.filteredItems = [];
+            const seen = new Set();
             for (const [catName, emotes] of Object.entries(this.categories)) {
                 for (const emote of emotes) {
-                    if (this._matchesSearch(emote, term)) {
+                    const key = emote.emoteType + ':' + emote.name;
+                    if (!seen.has(key) && this._matchesSearch(emote, term)) {
+                        seen.add(key);
                         this.filteredItems.push({ ...emote });
                     }
                 }
