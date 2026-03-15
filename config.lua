@@ -11,6 +11,7 @@ Config = {
     keybindKVP = "rpemotes",
     NotificationsAsChatMessage = false,
     Search = true, -- Used to enable or disable the search feature in the menu.
+    CommandTooltip = true, -- If set to false, disables the command tooltip shown when hovering over emotes.
     CancelPreviousEmote = false, -- If true, playing an emote will cancel the previous one and play the newly selected emote, if false, some emotes can be combined/played at the same time
     DisableControlsInMenu = false, -- Disables all controls (including combat, movement, etc) while menu is open
     DisableCombatInMenu = false, -- Disables combat (attacking, aiming, melee) while menu is open

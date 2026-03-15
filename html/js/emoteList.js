@@ -42,9 +42,13 @@ const EmoteList = {
 
         SmoothScroll.init(this._scrollEl);
 
-        this._tooltipEl = document.createElement('div');
-        this._tooltipEl.className = 'cmd-tooltip';
-        document.getElementById('emote-menu').appendChild(this._tooltipEl);
+        if (Store.config.commandTooltipEnabled) {
+            this._tooltipEl = document.createElement('div');
+            this._tooltipEl.className = 'cmd-tooltip';
+            document.getElementById('emote-menu').appendChild(this._tooltipEl);
+        } else {
+            this._showTooltip = this._hideTooltip = () => {};
+        }
 
         this._scrollEl.addEventListener('mousemove', (e) => {
             this._lastMouseX = e.clientX;

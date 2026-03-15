@@ -555,6 +555,7 @@ local function getRelevantConfig()
     return {
         searchEnabled = Config.Search,
         keybindingEnabled = Config.Keybinding,
+        commandTooltipEnabled = Config.CommandTooltip ~= false,
         placementEnabled = Config.PlacementEnabled,
         sharedEmotesEnabled = Config.SharedEmotesEnabled,
         animalEmotesEnabled = Config.AnimalEmotesEnabled,
