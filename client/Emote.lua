@@ -909,7 +909,7 @@ local function recoverLostAnimation()
     local pPed = PlayerPedId()
     if IsEntityDead(pPed) then return end
     if isBumpingPed then
-        timeout = 500
+        pedBumpTimeout = 500
         return
     end
     isBumpingPed = true
