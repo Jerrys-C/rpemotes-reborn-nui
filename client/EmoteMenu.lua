@@ -41,6 +41,9 @@ local categoryToEmotes = {}
 -- ─── Utility functions (preserved from original) ───
 
 local function canPlayerEmote()
+    if not LocalPlayer.state.canEmote and GetConvar("onesync", "on") == "on" then
+        return false, Translate('emotesblocked')
+    end
     local ped = PlayerPedId()
     if IsEntityDead(ped) then
         return false, Translate('dead')

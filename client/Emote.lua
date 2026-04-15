@@ -204,7 +204,10 @@ local function exitScenario()
 end
 
 function EmoteCancel(force)
-    if (not LocalPlayer.state.canCancel and GetConvar("onesync", "off") == "on") and not force then return end
+    if (not LocalPlayer.state.canCancel and GetConvar("onesync", "on") == "on") and not force then
+        EmoteChatMessage(Translate('cancelblocked'))
+        return
+    end
 
     LocalPlayer.state:set('currentEmote', nil, true)
     EmoteCancelPlaying = true
@@ -694,7 +697,10 @@ function OnEmotePlay(name, textureVariation, emoteType)
         return
     end
 
-    if not LocalPlayer.state.canEmote and GetConvar("onesync", "off") == "on" then return end
+    if not LocalPlayer.state.canEmote and GetConvar("onesync", "on") == "on" then
+        EmoteChatMessage(Translate('emotesblocked'))
+        return
+    end
 
     if not DoesEntityExist(PlayerPedId()) then return false end
 

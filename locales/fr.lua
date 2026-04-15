@@ -46,6 +46,8 @@ return {
     ['btn_preview'] = "Aperçu",
     ['dead'] = "Vous ne pouvez pas faire d'animation en étant mort !",
     ['swimming'] = "Vous ne pouvez pas faire d'emotes en nageant",
+    ['emotesblocked'] = "Les emotes sont actuellement désactivées",
+    ['cancelblocked'] = "Vous ne pouvez pas annuler votre emote pour le moment",
     ['animaldisabled'] = "Désolé! Les emotes d'animaux sont désactivées sur ce serveur",
     ['adultemotedisabled'] = "Bonk ! Les Emotes adultes sont désactivées🔞",
     ['toggle_instructions'] = "Afficher / Masquer les instructions",

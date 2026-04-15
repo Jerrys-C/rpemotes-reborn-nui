@@ -62,6 +62,8 @@ return {
     ['btn_setkeybind'] = "Set as Keybind",
     ['dead'] = "You can't use emotes right now!",
     ['swimming'] = "You can't use emotes while swimming",
+    ['emotesblocked'] = "Emotes are currently disabled",
+    ['cancelblocked'] = "You can't cancel your emote right now",
     ['animaldisabled'] = "Sorry! Animal emotes are disabled on this server",
     ['abusableemotedisabled'] = "Sorry! This emote has been disabled on this server",
     ['adultemotedisabled'] = "Bonk! Adult emotes disabled 🔞",

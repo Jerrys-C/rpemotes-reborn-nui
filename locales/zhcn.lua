@@ -82,6 +82,8 @@ return {
     ['btn_delkeybind'] = "清除绑定",
     ['dead'] = "你不能在死亡时使用动作!",
     ['swimming'] = "你不能在游泳时使用动作",
+    ['emotesblocked'] = "当前动作功能已被禁用",
+    ['cancelblocked'] = "你现在无法取消动作",
     ['animaldisabled'] = "抱歉! 服务器禁用了动物动作",
     ['abusableemotedisabled'] = "抱歉！该动作在本服务器已被禁用",
     ['adultemotedisabled'] = "Bonk! 禁用了成人动作 🔞",

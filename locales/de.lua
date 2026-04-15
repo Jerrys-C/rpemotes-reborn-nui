@@ -62,6 +62,8 @@ return {
     ['btn_setkeybind'] = "Taste zuweisen",
     ['dead'] = "Du kannst keine Emotes verwenden, während du tot bist!",
     ['swimming'] = "Du kannst keine Emotes verwenden, während du schwimmst",
+    ['emotesblocked'] = "Emotes sind derzeit deaktiviert",
+    ['cancelblocked'] = "Du kannst dein Emote gerade nicht abbrechen",
     ['animaldisabled'] = "Entschuldigung! Tier-Emotes sind auf diesem Server deaktiviert",
     ['abusableemotedisabled'] = "Entschuldigung! Dieses Emote ist auf diesem Server deaktiviert",
     ['adultemotedisabled'] = "Bonk! 18+ Emotes deaktiviert 🔞",
