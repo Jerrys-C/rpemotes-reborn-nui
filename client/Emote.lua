@@ -197,7 +197,13 @@ local function exitScenario()
         or ChosenScenarioType == ScenarioType.SCENARIO)
         and IsInAnimation
     then
-        ClearPedTasksImmediately(PlayerPedId())
+        local playerPed = PlayerPedId()
+        if IsPedInAnyVehicle(playerPed) then
+            ClearPedSecondaryTask(playerPed)
+            ClearPedTasks(playerPed)
+        else
+            ClearPedTasksImmediately(playerPed)
+        end
         IsInAnimation = false
         DebugPrint("Forced scenario exit")
     end
@@ -826,7 +832,13 @@ function OnEmotePlay(name, textureVariation, emoteType)
     end
 
     if IsPedUsingAnyScenario(PlayerPedId()) or IsPedActiveInScenario(PlayerPedId()) then
-        ClearPedTasksImmediately(PlayerPedId())
+        local playerPed = PlayerPedId()
+        if IsPedInAnyVehicle(playerPed) then
+            ClearPedSecondaryTask(playerPed)
+            ClearPedTasks(playerPed)
+        else
+            ClearPedTasksImmediately(playerPed)
+        end
     end
 
     local flags = animOption?.Flag or movementType or 0
