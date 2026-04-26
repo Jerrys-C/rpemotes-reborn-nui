@@ -107,13 +107,17 @@ local models = {
     [`poprprott`] = CompatGroup.RETRIEVER,
     [`retriever_k9`] = CompatGroup.RETRIEVER,
     [`standardpitbullprp`] = CompatGroup.RETRIEVER,
+    [`poprppandacub`] = CompatGroup.RETRIEVER,
 
     -- HUSKY
     [`a_c_husky`] = CompatGroup.HUSKY,
     [`a_c_dalmatian`] = CompatGroup.HUSKY,
 
-    -- popcornrp-pets: https://github.com/alberttheprince/popcornrp-pets
+    -- Popcorn Roleplay Peds: https://popcornrp-store.tebex.io/
     [`huskyk9_new`] = CompatGroup.HUSKY,
+    [`poprptibetmastif`] = CompatGroup.HUSKY,
+    [`voidhandpoprp`] = CompatGroup.HUSKY,
+    [`poprpdirewolfsilv`] = CompatGroup.HUSKY,
     -- Future Store: https://future.tebex.io/category/animals-1
     [`akita_inu`] = CompatGroup.HUSKY,
     [`dalmatian`] = CompatGroup.HUSKY,
@@ -156,6 +160,7 @@ local models = {
     [`rottweilerpupprp`] = CompatGroup.SMALL_DOG,
     [`samoyedpuppyprp`] = CompatGroup.SMALL_DOG,
     [`standardpoodlepupprp`] = CompatGroup.SMALL_DOG,
+    [`poprpcorgi`] = CompatGroup.SMALL_DOG,
     -- Future Store: https://future.tebex.io/category/animals-1
     [`beagle`] = CompatGroup.SMALL_DOG,
     [`corgi`] = CompatGroup.SMALL_DOG,
