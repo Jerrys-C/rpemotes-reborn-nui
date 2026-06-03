@@ -17,7 +17,7 @@ if Config.CheckForUpdates then
         end
 
         SetTimeout(1000, function()
-            PerformHttpRequest('https://api.github.com/repos/alberttheprince/rpemotes-reborn/releases/latest', function(statusCode, responseBody)
+            PerformHttpRequest('https://api.github.com/repos/Jerrys-C/rpemotes-reborn-nui/releases/latest', function(statusCode, responseBody)
                 if statusCode ~= 200 then return end
 
                 local releaseInfo = json.decode(responseBody)
