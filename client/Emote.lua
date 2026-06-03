@@ -566,7 +566,7 @@ function EmoteCommandStart(args)
     if emote.emoteType == EmoteType.PROP_EMOTES
         and emote.AnimationOptions.PropTextureVariations
     then
-        local textureVariation = tonumber(args[2])
+        local textureVariation = tonumber(args[2]) or 1
         if emote.AnimationOptions.PropTextureVariations[textureVariation] then
             OnEmotePlay(name, textureVariation - 1)
             return
@@ -703,6 +703,15 @@ function OnEmotePlay(name, textureVariation, emoteType)
     local emoteData = emoteType == EmoteType.SHARED and SharedEmoteData[name] or EmoteData[name]
     if not emoteData then
         EmoteChatMessage("'" .. name .. "' " .. Translate('notvalidemote') .. "")
+        return
+    end
+
+    if IsPedBusy(PlayerPedId()) then
+        TriggerEvent('chat:addMessage', {
+            color = { 255, 0, 0 },
+            multiline = true,
+            args = { "RPEmotes", Translate('dead') }
+        })
         return
     end
 
